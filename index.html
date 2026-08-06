@@ -409,6 +409,25 @@
   .actions .del-btn:hover{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
 
   /* ---- calendar ---- */
+  .unscheduled-bar{
+    display:none;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 12px;
+    margin-bottom:14px;
+  }
+  .unscheduled-bar .label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    margin-right:2px;
+  }
+  .unscheduled-bar .chip{ cursor:pointer; }
+
   .cal-nav{
     display:flex;
     align-items:center;
@@ -494,6 +513,7 @@
   .chip.u-normal{ background:var(--low-bg); color:var(--teal-deep); }
   .chip.u-note{ background:var(--note-bg); color:var(--note-text); }
   .chip.done{ text-decoration:line-through; opacity:0.55; }
+  .chip.chip-deadline{ font-weight:700; box-shadow:0 0 0 1px var(--red) inset; }
   .more-link{
     font-size:10px;
     color:var(--muted);
@@ -652,6 +672,7 @@
 
     <!-- calendar view -->
     <div id="calendarWrap">
+      <div class="unscheduled-bar" id="unscheduledBar"></div>
       <div class="cal-nav">
         <button class="nav-btn" id="calPrev">←</button>
         <div class="label" id="calLabel"></div>
@@ -855,24 +876,32 @@
     return compareByDeadline(a,b);
   }
 
-  // tasks with a deadline are grouped under their deadline date;
-  // tasks with an unlimited (empty) deadline are grouped under the date they were received
-  function taskCalendarKey(t){
-    return t.deadline || t.received;
-  }
+  // Tasks appear on the calendar in up to two places:
+  //  - the day they were received (always, unless it coincides with the deadline day below)
+  //  - the day they are due, tagged as a deadline occurrence ("🔥deadline")
+  // Tasks with no deadline only show on their received day, plus the dedicated "不限期限" slot.
   function groupByDate(list){
     const map = {};
-    list.forEach(t => {
-      const key = taskCalendarKey(t);
+    function push(key, entry){
       if(!key) return;
-      (map[key] = map[key] || []).push(t);
+      (map[key] = map[key] || []).push(entry);
+    }
+    list.forEach(t => {
+      if(t.deadline && t.deadline === t.received){
+        push(t.received, { task:t, isDeadline:true });
+      }else{
+        push(t.received, { task:t, isDeadline:false });
+        if(t.deadline) push(t.deadline, { task:t, isDeadline:true });
+      }
     });
-    Object.values(map).forEach(arr => arr.sort(compareByUrgency));
+    Object.values(map).forEach(arr => arr.sort((a,b) => compareByUrgency(a.task,b.task)));
     return map;
   }
 
-  function chipHtml(t){
-    return `<span class="chip u-${t.urgency}${t.done?' done':''}" data-key="${taskCalendarKey(t)}">${escapeHtml(t.title)}</span>`;
+  function chipHtml(entry, cellKey){
+    const t = entry.task;
+    const label = entry.isDeadline ? `🔥deadline ${escapeHtml(t.title)}` : escapeHtml(t.title);
+    return `<span class="chip u-${t.urgency}${t.done?' done':''}${entry.isDeadline?' chip-deadline':''}" data-key="${cellKey}">${label}</span>`;
   }
 
   function renderMonth(){
@@ -893,21 +922,35 @@
       const d = new Date(start);
       d.setDate(start.getDate() + i);
       const key = dateKey(d);
-      const dayTasks = map[key] || [];
+      const dayEntries = map[key] || [];
       const isOther = d.getMonth() !== month;
       const isToday = key === todayKey;
       const CHIP_LIMIT = 3;
-      const shown = dayTasks.slice(0, CHIP_LIMIT);
-      const restCount = dayTasks.length - shown.length;
+      const shown = dayEntries.slice(0, CHIP_LIMIT);
+      const restCount = dayEntries.length - shown.length;
 
       html += `
-        <div class="cal-day${isOther?' other-month':''}${isToday?' today':''}${dayTasks.length?' has-tasks':''}" data-key="${key}">
+        <div class="cal-day${isOther?' other-month':''}${isToday?' today':''}${dayEntries.length?' has-tasks':''}" data-key="${key}">
           <span class="num">${d.getDate()}</span>
-          ${shown.map(t => chipHtml(t)).join('')}
+          ${shown.map(entry => chipHtml(entry, key)).join('')}
           ${restCount > 0 ? `<span class="more-link" data-key="${key}">+${restCount} 更多</span>` : ''}
         </div>`;
     }
     document.getElementById('calGrid').innerHTML = html;
+  }
+
+  // dedicated slot for tasks that have no deadline set at all
+  function renderUnscheduled(){
+    const bar = document.getElementById('unscheduledBar');
+    const list = filteredTasks().filter(t => !t.deadline);
+    if(list.length === 0){
+      bar.style.display = 'none';
+      bar.innerHTML = '';
+      return;
+    }
+    bar.style.display = 'flex';
+    bar.innerHTML = `<span class="label">不限期限：</span>` +
+      list.sort(compareByUrgency).map(t => `<span class="chip u-${t.urgency}${t.done?' done':''}" data-key="unlimited">${escapeHtml(t.title)}</span>`).join('');
   }
 
   function openDayModal(key){
@@ -921,10 +964,16 @@
   }
   function renderModal(){
     if(!modalDateKey) return;
-    const [y,m,d] = modalDateKey.split('-').map(Number);
-    const dObj = new Date(y, m-1, d);
-    document.getElementById('modalTitle').textContent = `${y}年${m}月${d}日 星期${weekdayNames[dObj.getDay()]}`;
-    const list = filteredTasks().filter(t => taskCalendarKey(t) === modalDateKey).sort(compareByUrgency);
+    let list;
+    if(modalDateKey === 'unlimited'){
+      document.getElementById('modalTitle').textContent = '不限期限的工作';
+      list = filteredTasks().filter(t => !t.deadline).sort(compareByUrgency);
+    }else{
+      const [y,m,d] = modalDateKey.split('-').map(Number);
+      const dObj = new Date(y, m-1, d);
+      document.getElementById('modalTitle').textContent = `${y}年${m}月${d}日 星期${weekdayNames[dObj.getDay()]}`;
+      list = filteredTasks().filter(t => t.received === modalDateKey || t.deadline === modalDateKey).sort(compareByUrgency);
+    }
     const modalCards = document.getElementById('modalCards');
     modalCards.innerHTML = list.length === 0
       ? `<div class="modal-empty">這天沒有符合目前篩選條件的工作</div>`
@@ -933,6 +982,7 @@
 
   function renderAll(){
     renderSourceOptions();
+    renderUnscheduled();
     renderMonth();
     renderStats();
     if(modalDateKey) renderModal();
@@ -1126,6 +1176,10 @@
     if(key && ((cell && cell.classList.contains('has-tasks')) || e.target.classList.contains('chip') || e.target.classList.contains('more-link'))){
       openDayModal(key);
     }
+  });
+  document.getElementById('unscheduledBar').addEventListener('click', (e) => {
+    const key = e.target.dataset.key;
+    if(key) openDayModal(key);
   });
 
   // ---- modal close ----
