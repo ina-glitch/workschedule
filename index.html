@@ -229,6 +229,22 @@
     transition:background .15s ease;
   }
   .submit-btn:hover{ background:var(--teal-deep); }
+  .cancel-edit-btn{
+    width:100%;
+    background:var(--card);
+    color:var(--ink-soft);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:10px 0;
+    font-size:12.5px;
+    font-weight:600;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+    margin-top:8px;
+    transition:background .15s ease;
+  }
+  .cancel-edit-btn:hover{ background:var(--low-bg); }
+  .panel.editing{ box-shadow:inset 3px 0 0 var(--teal); }
 
   /* ---- main list ---- */
   .main{ padding:28px 28px 60px; }
@@ -389,6 +405,7 @@
     white-space:nowrap;
   }
   .actions .done-btn:hover{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
+  .actions .edit-btn:hover{ background:#EEF0FB; border-color:#4A4FB0; color:#4A4FB0; }
   .actions .del-btn:hover{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
 
   /* ---- calendar ---- */
@@ -562,8 +579,8 @@
 <div class="layout">
   <!-- FORM -->
   <div class="panel">
-    <h2>新增工作</h2>
-    <p class="hint">填寫後按下方按鈕加入清單</p>
+    <h2 id="formTitle">新增工作</h2>
+    <p class="hint" id="formHint">填寫後按下方按鈕加入清單</p>
     <form id="taskForm">
       <div class="field">
         <label for="title">工作名稱 / 內容說明</label>
@@ -605,7 +622,8 @@
         </div>
       </div>
 
-      <button type="submit" class="submit-btn">加入工作清單</button>
+      <button type="submit" class="submit-btn" id="submitBtn">加入工作清單</button>
+      <button type="button" class="cancel-edit-btn" id="cancelEditBtn" style="display:none;">取消編輯</button>
     </form>
   </div>
 
@@ -682,6 +700,7 @@
   let sourceFilter = 'all';
   let calRefDate = new Date();
   let modalDateKey = null;
+  let editingId = null;
 
   async function load(){
     try{
@@ -812,6 +831,7 @@
         </div>
         <div class="actions">
           <button class="done-btn" data-id="${t.id}">${t.done ? '取消完成' : '標記完成'}</button>
+          <button class="edit-btn" data-id="${t.id}">編輯</button>
           <button class="del-btn" data-id="${t.id}">刪除</button>
         </div>
       </div>`;
@@ -918,6 +938,61 @@
     if(modalDateKey) renderModal();
   }
 
+  // ---- add / edit form helpers ----
+  const formTitleEl = document.getElementById('formTitle');
+  const formHintEl = document.getElementById('formHint');
+  const submitBtn = document.getElementById('submitBtn');
+  const cancelEditBtn = document.getElementById('cancelEditBtn');
+  const panelEl = document.querySelector('.panel');
+  const titleInput = document.getElementById('title');
+  const sourceInput = document.getElementById('source');
+
+  function resetFormToAddMode(){
+    editingId = null;
+    document.getElementById('taskForm').reset();
+    receivedInput.value = toLocalDateValue(new Date());
+    document.getElementById('u-normal').checked = true;
+    deadlineUnlimited.checked = false;
+    deadlineInput.disabled = false;
+    deadlineInput.required = true;
+    formTitleEl.textContent = '新增工作';
+    formHintEl.textContent = '填寫後按下方按鈕加入清單';
+    submitBtn.textContent = '加入工作清單';
+    cancelEditBtn.style.display = 'none';
+    panelEl.classList.remove('editing');
+  }
+
+  function startEdit(id){
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    editingId = id;
+    closeDayModal();
+    titleInput.value = t.title;
+    sourceInput.value = t.source || '';
+    receivedInput.value = t.received;
+    if(t.deadline){
+      deadlineUnlimited.checked = false;
+      deadlineInput.disabled = false;
+      deadlineInput.required = true;
+      deadlineInput.value = t.deadline;
+    }else{
+      deadlineUnlimited.checked = true;
+      deadlineInput.disabled = true;
+      deadlineInput.required = false;
+      deadlineInput.value = '';
+    }
+    document.getElementById('u-' + t.urgency).checked = true;
+    formTitleEl.textContent = '編輯工作';
+    formHintEl.textContent = '修改內容後按下方按鈕儲存';
+    submitBtn.textContent = '儲存修改';
+    cancelEditBtn.style.display = 'block';
+    panelEl.classList.add('editing');
+    panelEl.scrollIntoView({ behavior:'smooth', block:'start' });
+    titleInput.focus();
+  }
+
+  cancelEditBtn.addEventListener('click', resetFormToAddMode);
+
   // ---- form submit ----
   document.getElementById('taskForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -931,28 +1006,44 @@
     if(!title || !received) return;
     if(!isUnlimited && !deadline) return;
 
-    const newTask = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-      title, source, received, deadline, urgency, done:false
-    };
-    tasks.push(newTask);
-    saveLocalBackup();
-    renderAll();
-
-    e.target.reset();
-    receivedInput.value = toLocalDateValue(new Date());
-    document.getElementById('u-normal').checked = true;
-    deadlineUnlimited.checked = false;
-    deadlineInput.disabled = false;
-    deadlineInput.required = true;
-
-    const { error } = await sb.from(TABLE).insert(newTask);
-    if(error){
-      console.error('新增到 Supabase 失敗：', error);
-      alert('新增失敗，請檢查網路連線或 Supabase 設定。');
-      tasks = tasks.filter(t => t.id !== newTask.id);
+    if(editingId){
+      // ---- edit existing task ----
+      const id = editingId;
+      const t = tasks.find(x => x.id === id);
+      if(!t) return;
+      const prev = { title:t.title, source:t.source, received:t.received, deadline:t.deadline, urgency:t.urgency };
+      t.title = title; t.source = source; t.received = received; t.deadline = deadline; t.urgency = urgency;
       saveLocalBackup();
+      resetFormToAddMode();
       renderAll();
+
+      const { error } = await sb.from(TABLE).update({ title, source, received, deadline, urgency }).eq('id', id);
+      if(error){
+        console.error('更新到 Supabase 失敗：', error);
+        alert('儲存修改失敗，請檢查網路連線或 Supabase 設定。');
+        Object.assign(t, prev);
+        saveLocalBackup();
+        renderAll();
+      }
+    }else{
+      // ---- add new task ----
+      const newTask = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+        title, source, received, deadline, urgency, done:false
+      };
+      tasks.push(newTask);
+      saveLocalBackup();
+      resetFormToAddMode();
+      renderAll();
+
+      const { error } = await sb.from(TABLE).insert(newTask);
+      if(error){
+        console.error('新增到 Supabase 失敗：', error);
+        alert('新增失敗，請檢查網路連線或 Supabase 設定。');
+        tasks = tasks.filter(t => t.id !== newTask.id);
+        saveLocalBackup();
+        renderAll();
+      }
     }
   });
 
@@ -977,6 +1068,7 @@
     if(!confirm('確定要刪除這筆工作紀錄嗎？')) return;
     const removed = tasks.find(x => x.id === id);
     tasks = tasks.filter(x => x.id !== id);
+    if(editingId === id) resetFormToAddMode();
     saveLocalBackup();
     renderAll();
     const { error } = await sb.from(TABLE).delete().eq('id', id);
@@ -988,8 +1080,10 @@
   }
   document.addEventListener('click', (e) => {
     const doneBtn = e.target.closest('.done-btn');
+    const editBtn = e.target.closest('.edit-btn');
     const delBtn = e.target.closest('.del-btn');
     if(doneBtn){ toggleDone(doneBtn.dataset.id); }
+    if(editBtn){ startEdit(editBtn.dataset.id); }
     if(delBtn){ deleteTask(delBtn.dataset.id); }
   });
 
