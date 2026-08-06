@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>INA💣工作紀錄板</title>
+<title>INA-working schedule💣</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -267,6 +267,19 @@
   .seg button:last-child{ border-right:none; }
   .seg button.active{ background:var(--ink); color:#fff; }
 
+  .source-select{
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:var(--card);
+    padding:0 10px;
+    font-size:12px;
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--ink-soft);
+    cursor:pointer;
+    height:32px;
+  }
+  .source-select:focus{ outline:none; border-color:var(--teal); }
+
   .empty{
     border:1px dashed var(--line);
     border-radius:var(--radius);
@@ -379,24 +392,6 @@
   .actions .del-btn:hover{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
 
   /* ---- calendar ---- */
-  .unscheduled-bar{
-    display:none;
-    align-items:center;
-    gap:8px;
-    flex-wrap:wrap;
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:10px 12px;
-    margin-bottom:14px;
-  }
-  .unscheduled-bar .label{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:11px;
-    color:var(--muted);
-    margin-right:2px;
-  }
-
   .cal-nav{
     display:flex;
     align-items:center;
@@ -490,38 +485,6 @@
   }
   .more-link:hover{ color:var(--teal-deep); }
 
-  .week-grid{
-    display:grid;
-    grid-template-columns:repeat(7,1fr);
-    gap:8px;
-  }
-  .week-day{
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:10px;
-    min-height:280px;
-    display:flex;
-    flex-direction:column;
-    gap:7px;
-  }
-  .week-day.today{ border-color:var(--teal); box-shadow:0 0 0 1px var(--teal) inset; }
-  .week-day .wd-head{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:11px;
-    color:var(--muted);
-    padding-bottom:6px;
-    border-bottom:1px solid var(--line);
-  }
-  .week-day .wd-head b{
-    display:block;
-    font-family:'Space Grotesk',sans-serif;
-    font-size:15px;
-    color:var(--ink);
-  }
-  .week-day.today .wd-head b{ color:var(--teal-deep); }
-  .week-day .chip{ white-space:normal; }
-
   /* ---- modal ---- */
   .modal-overlay{
     position:fixed; inset:0;
@@ -582,14 +545,13 @@
     .stat-strip{ display:none; }
     .cal-day{ min-height:64px; padding:5px; }
     .chip{ font-size:9.5px; }
-    .week-grid{ grid-template-columns:1fr; }
   }
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <div class="brand"><span class="mark"></span>工作紀錄板<span class="sub">WORK LOG · 本機儲存</span></div>
+  <div class="brand"><span class="mark"></span>INA-working schedule💣</div>
   <div class="stat-strip">
     <div class="stat"><b id="statTotal">0</b>總計</div>
     <div class="stat"><b id="statActive">0</b>進行中</div>
@@ -652,15 +614,6 @@
     <div class="list-head">
       <h1>所有工作</h1>
       <div class="controls">
-        <div class="seg" id="viewSeg">
-          <button data-view="list" class="active">列表</button>
-          <button data-view="month">月曆</button>
-          <button data-view="week">週曆</button>
-        </div>
-        <div class="seg" id="sortSeg">
-          <button data-sort="deadline" class="active">依結案日期</button>
-          <button data-sort="urgency">依緊急程度</button>
-        </div>
         <div class="seg" id="filterSeg">
           <button data-filter="active" class="active">進行中</button>
           <button data-filter="all">全部</button>
@@ -673,21 +626,14 @@
           <button data-urgency="normal">普通件</button>
           <button data-urgency="note">備註</button>
         </div>
+        <select id="sourceFilter" class="source-select">
+          <option value="all">全部來源</option>
+        </select>
       </div>
-    </div>
-
-    <!-- list view -->
-    <div id="listWrap">
-      <div class="empty" id="emptyState">
-        <div class="big">目前沒有工作紀錄</div>
-        在左側表單新增第一筆工作吧
-      </div>
-      <div class="cards" id="cards"></div>
     </div>
 
     <!-- calendar view -->
-    <div id="calendarWrap" style="display:none;">
-      <div class="unscheduled-bar" id="unscheduledBar"></div>
+    <div id="calendarWrap">
       <div class="cal-nav">
         <button class="nav-btn" id="calPrev">←</button>
         <div class="label" id="calLabel"></div>
@@ -700,10 +646,6 @@
           <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
         </div>
         <div class="cal-grid" id="calGrid"></div>
-      </div>
-
-      <div id="weekView" style="display:none;">
-        <div class="week-grid" id="weekGrid"></div>
       </div>
     </div>
   </div>
@@ -735,10 +677,9 @@
   const weekdayNames = ['日','一','二','三','四','五','六'];
 
   let tasks = [];
-  let sortMode = 'deadline';
   let filterMode = 'active';
   let urgencyFilter = 'all';
-  let viewMode = 'list';
+  let sourceFilter = 'all';
   let calRefDate = new Date();
   let modalDateKey = null;
 
@@ -827,7 +768,23 @@
     if(filterMode === 'active') list = list.filter(t => !t.done);
     if(filterMode === 'done') list = list.filter(t => t.done);
     if(urgencyFilter !== 'all') list = list.filter(t => t.urgency === urgencyFilter);
+    if(sourceFilter !== 'all') list = list.filter(t => (t.source || '(未填寫來源)') === sourceFilter);
     return list;
+  }
+
+  function renderSourceOptions(){
+    const sel = document.getElementById('sourceFilter');
+    const sources = Array.from(new Set(tasks.map(t => t.source && t.source.trim() ? t.source.trim() : '(未填寫來源)'))).sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+    const prev = sourceFilter;
+    sel.innerHTML = `<option value="all">全部來源</option>` +
+      sources.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    // keep current selection if it still exists among sources, else reset to all
+    if(prev !== 'all' && sources.includes(prev)){
+      sel.value = prev;
+    }else{
+      sourceFilter = 'all';
+      sel.value = 'all';
+    }
   }
 
   function cardHtml(t){
@@ -878,45 +835,24 @@
     return compareByDeadline(a,b);
   }
 
-  function renderList(){
-    const wrap = document.getElementById('cards');
-    const empty = document.getElementById('emptyState');
-    let list = filteredTasks();
-
-    list.sort(sortMode === 'deadline' ? compareByDeadline : compareByUrgency);
-    if(filterMode === 'all'){
-      list.sort((a,b) => (a.done === b.done) ? 0 : (a.done ? 1 : -1));
-    }
-
-    wrap.innerHTML = list.map(cardHtml).join('');
-    empty.style.display = list.length ? 'none' : 'block';
+  // tasks with a deadline are grouped under their deadline date;
+  // tasks with an unlimited (empty) deadline are grouped under the date they were received
+  function taskCalendarKey(t){
+    return t.deadline || t.received;
   }
-
   function groupByDate(list){
     const map = {};
     list.forEach(t => {
-      if(!t.deadline) return;
-      (map[t.deadline] = map[t.deadline] || []).push(t);
+      const key = taskCalendarKey(t);
+      if(!key) return;
+      (map[key] = map[key] || []).push(t);
     });
     Object.values(map).forEach(arr => arr.sort(compareByUrgency));
     return map;
   }
 
-  function chipHtml(t, keyOverride){
-    const key = keyOverride !== undefined ? keyOverride : t.deadline;
-    return `<span class="chip u-${t.urgency}${t.done?' done':''}" data-key="${key}">${escapeHtml(t.title)}</span>`;
-  }
-
-  function renderUnscheduled(){
-    const bar = document.getElementById('unscheduledBar');
-    const list = filteredTasks().filter(t => !t.deadline);
-    if(list.length === 0){
-      bar.style.display = 'none';
-      bar.innerHTML = '';
-      return;
-    }
-    bar.style.display = 'flex';
-    bar.innerHTML = `<span class="label">不限期限：</span>` + list.map(t => chipHtml(t, 'unlimited')).join('');
+  function chipHtml(t){
+    return `<span class="chip u-${t.urgency}${t.done?' done':''}" data-key="${taskCalendarKey(t)}">${escapeHtml(t.title)}</span>`;
   }
 
   function renderMonth(){
@@ -954,39 +890,6 @@
     document.getElementById('calGrid').innerHTML = html;
   }
 
-  function renderWeek(){
-    const list = filteredTasks();
-    const map = groupByDate(list);
-    const ref = new Date(calRefDate);
-    const start = new Date(ref);
-    start.setDate(ref.getDate() - ref.getDay());
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    document.getElementById('calLabel').textContent =
-      `${start.getFullYear()}/${pad(start.getMonth()+1)}/${pad(start.getDate())} － ${pad(end.getMonth()+1)}/${pad(end.getDate())}`;
-
-    const todayKey = dateKey(new Date());
-    let html = '';
-    for(let i=0;i<7;i++){
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      const key = dateKey(d);
-      const dayTasks = map[key] || [];
-      const isToday = key === todayKey;
-      const CHIP_LIMIT = 6;
-      const shown = dayTasks.slice(0, CHIP_LIMIT);
-      const restCount = dayTasks.length - shown.length;
-
-      html += `
-        <div class="week-day${isToday?' today':''}" data-key="${key}">
-          <div class="wd-head">${weekdayNames[d.getDay()]}<b>${d.getMonth()+1}/${d.getDate()}</b></div>
-          ${shown.map(t => chipHtml(t)).join('')}
-          ${restCount > 0 ? `<span class="more-link" data-key="${key}">+${restCount} 更多</span>` : ''}
-        </div>`;
-    }
-    document.getElementById('weekGrid').innerHTML = html;
-  }
-
   function openDayModal(key){
     modalDateKey = key;
     renderModal();
@@ -998,16 +901,10 @@
   }
   function renderModal(){
     if(!modalDateKey) return;
-    let list;
-    if(modalDateKey === 'unlimited'){
-      document.getElementById('modalTitle').textContent = '不限期限的工作';
-      list = filteredTasks().filter(t => !t.deadline).sort(compareByUrgency);
-    }else{
-      const [y,m,d] = modalDateKey.split('-').map(Number);
-      const dObj = new Date(y, m-1, d);
-      document.getElementById('modalTitle').textContent = `${y}年${m}月${d}日 星期${weekdayNames[dObj.getDay()]}`;
-      list = filteredTasks().filter(t => t.deadline === modalDateKey).sort(compareByUrgency);
-    }
+    const [y,m,d] = modalDateKey.split('-').map(Number);
+    const dObj = new Date(y, m-1, d);
+    document.getElementById('modalTitle').textContent = `${y}年${m}月${d}日 星期${weekdayNames[dObj.getDay()]}`;
+    const list = filteredTasks().filter(t => taskCalendarKey(t) === modalDateKey).sort(compareByUrgency);
     const modalCards = document.getElementById('modalCards');
     modalCards.innerHTML = list.length === 0
       ? `<div class="modal-empty">這天沒有符合目前篩選條件的工作</div>`
@@ -1015,20 +912,8 @@
   }
 
   function renderAll(){
-    document.getElementById('listWrap').style.display = viewMode === 'list' ? '' : 'none';
-    document.getElementById('calendarWrap').style.display = viewMode === 'list' ? 'none' : '';
-    document.getElementById('sortSeg').style.display = viewMode === 'list' ? '' : 'none';
-    document.getElementById('monthView').style.display = viewMode === 'month' ? '' : 'none';
-    document.getElementById('weekView').style.display = viewMode === 'week' ? '' : 'none';
-
-    if(viewMode === 'list'){
-      renderList();
-    }else{
-      renderUnscheduled();
-      if(viewMode === 'month') renderMonth();
-      else if(viewMode === 'week') renderWeek();
-    }
-
+    renderSourceOptions();
+    renderMonth();
     renderStats();
     if(modalDateKey) renderModal();
   }
@@ -1108,20 +993,7 @@
     if(delBtn){ deleteTask(delBtn.dataset.id); }
   });
 
-  // ---- view switch ----
-  document.getElementById('viewSeg').addEventListener('click', (e) => {
-    if(e.target.tagName !== 'BUTTON') return;
-    viewMode = e.target.dataset.view;
-    [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
-    renderAll();
-  });
-
-  document.getElementById('sortSeg').addEventListener('click', (e) => {
-    if(e.target.tagName !== 'BUTTON') return;
-    sortMode = e.target.dataset.sort;
-    [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
-    renderAll();
-  });
+  // ---- filters ----
   document.getElementById('filterSeg').addEventListener('click', (e) => {
     if(e.target.tagName !== 'BUTTON') return;
     filterMode = e.target.dataset.filter;
@@ -1134,24 +1006,18 @@
     [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
     renderAll();
   });
+  document.getElementById('sourceFilter').addEventListener('change', (e) => {
+    sourceFilter = e.target.value;
+    renderAll();
+  });
 
-  // ---- calendar nav ----
+  // ---- calendar nav (month only) ----
   document.getElementById('calPrev').addEventListener('click', () => {
-    if(viewMode === 'month'){
-      calRefDate = new Date(calRefDate.getFullYear(), calRefDate.getMonth()-1, 1);
-    }else{
-      calRefDate = new Date(calRefDate);
-      calRefDate.setDate(calRefDate.getDate() - 7);
-    }
+    calRefDate = new Date(calRefDate.getFullYear(), calRefDate.getMonth()-1, 1);
     renderAll();
   });
   document.getElementById('calNext').addEventListener('click', () => {
-    if(viewMode === 'month'){
-      calRefDate = new Date(calRefDate.getFullYear(), calRefDate.getMonth()+1, 1);
-    }else{
-      calRefDate = new Date(calRefDate);
-      calRefDate.setDate(calRefDate.getDate() + 7);
-    }
+    calRefDate = new Date(calRefDate.getFullYear(), calRefDate.getMonth()+1, 1);
     renderAll();
   });
   document.getElementById('calToday').addEventListener('click', () => {
@@ -1159,24 +1025,13 @@
     renderAll();
   });
 
-  // ---- calendar / unscheduled-bar cell & chip clicks ----
+  // ---- calendar cell & chip clicks ----
   document.getElementById('calGrid').addEventListener('click', (e) => {
     const cell = e.target.closest('.cal-day');
     const key = e.target.dataset.key || (cell && cell.dataset.key);
     if(key && ((cell && cell.classList.contains('has-tasks')) || e.target.classList.contains('chip') || e.target.classList.contains('more-link'))){
       openDayModal(key);
     }
-  });
-  document.getElementById('weekGrid').addEventListener('click', (e) => {
-    const cell = e.target.closest('.week-day');
-    const key = e.target.dataset.key || (cell && cell.dataset.key);
-    if(key){
-      openDayModal(key);
-    }
-  });
-  document.getElementById('unscheduledBar').addEventListener('click', (e) => {
-    const key = e.target.dataset.key;
-    if(key) openDayModal(key);
   });
 
   // ---- modal close ----
