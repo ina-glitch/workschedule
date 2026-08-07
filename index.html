@@ -1075,6 +1075,7 @@
     }
     const sourceHtml = t.source ? `<span class="source">來源：${escapeHtml(t.source)}</span>` : '';
     const categoryHtml = t.category ? `<span class="category">類別：${escapeHtml(t.category)}</span>` : '';
+    const urgencyTagHtml = isSimpleCategory(t.category) ? '' : `<span class="tag u-${t.urgency}">${urgencyLabel[t.urgency]}</span>`;
     const completeInfoHtml = t.done && t.completedAt
       ? `<span class="badge ok">✅ 完成：${fmtDate(t.completedAt)}</span>`
       : '';
@@ -1087,7 +1088,7 @@
         <div class="body">
           <p class="title">${escapeHtml(t.title)}</p>
           <div class="meta">
-            <span class="tag u-${t.urgency}">${urgencyLabel[t.urgency]}</span>
+            ${urgencyTagHtml}
             ${categoryHtml}
             ${sourceHtml}
             <span>收到：${fmtDate(t.received)}</span>
@@ -1162,7 +1163,7 @@
     return categoryClassMap[t.category] || 'cat-none';
   }
   function urgencyDotHtml(t){
-    return `<span class="dot dot-${t.urgency}"></span>`;
+    return isSimpleCategory(t.category) ? '' : `<span class="dot dot-${t.urgency}"></span>`;
   }
 
   function chipHtml(entry, cellKey){
