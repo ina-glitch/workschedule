@@ -1209,10 +1209,348 @@
   }
 
   // dedicated slot for tasks that have no deadline set at all
+  // — only relevant for 法務 (or unspecified) tasks, since simple categories
+  // (請假/會議/公差) never use a deadline and already show up on their own date
   function renderUnscheduled(){
     const bar = document.getElementById('unscheduledBar');
-    const list = filteredTasks().filter(t => !t.deadline);
+    const list = filteredTasks().filter(t => !t.deadline && !SIMPLE_CATEGORIES.includes(t.category));
     if(list.length === 0){
       bar.style.display = 'none';
       bar.innerHTML = '';
-   
+      return;
+    }
+    bar.style.display = 'flex';
+    bar.innerHTML = `<span class="label">不限期限：</span>` +
+      list.sort(compareByUrgency).map(t => `<span class="chip ${categoryClass(t)}${t.done?' done':''}" data-key="unlimited">${urgencyDotHtml(t)}<span class="label-text">${escapeHtml(t.title)}</span></span>`).join('');
+  }
+
+  function openDayModal(key){
+    modalDateKey = key;
+    renderModal();
+    document.getElementById('modalOverlay').style.display = 'flex';
+  }
+  function closeDayModal(){
+    modalDateKey = null;
+    document.getElementById('modalOverlay').style.display = 'none';
+  }
+  function renderModal(){
+    if(!modalDateKey) return;
+    let list;
+    if(modalDateKey === 'unlimited'){
+      document.getElementById('modalTitle').textContent = '不限期限的工作';
+      list = filteredTasks().filter(t => !t.deadline && !SIMPLE_CATEGORIES.includes(t.category)).sort(compareByUrgency);
+    }else{
+      const [y,m,d] = modalDateKey.split('-').map(Number);
+      const dObj = new Date(y, m-1, d);
+      document.getElementById('modalTitle').textContent = `${y}年${m}月${d}日 星期${weekdayNames[dObj.getDay()]}`;
+      list = filteredTasks().filter(t => t.received === modalDateKey || t.deadline === modalDateKey || t.completedAt === modalDateKey).sort(compareByUrgency);
+    }
+    const modalCards = document.getElementById('modalCards');
+    modalCards.innerHTML = list.length === 0
+      ? `<div class="modal-empty">這天沒有符合目前篩選條件的工作</div>`
+      : list.map(cardHtml).join('');
+  }
+
+  function renderAll(){
+    renderSourceOptions();
+    renderUnscheduled();
+    renderMonth();
+    renderStats();
+    if(modalDateKey) renderModal();
+  }
+
+  // ---- add / edit form helpers ----
+  const formTitleEl = document.getElementById('formTitle');
+  const formHintEl = document.getElementById('formHint');
+  const submitBtn = document.getElementById('submitBtn');
+  const cancelEditBtn = document.getElementById('cancelEditBtn');
+  const panelEl = document.querySelector('.panel');
+  const titleInput = document.getElementById('title');
+  const sourceInput = document.getElementById('source');
+
+  function resetFormToAddMode(){
+    editingId = null;
+    document.getElementById('taskForm').reset();
+    receivedInput.value = toLocalDateValue(new Date());
+    document.getElementById('u-normal').checked = true;
+    categoryInput.value = '';
+    deadlineUnlimited.checked = false;
+    deadlineInput.disabled = false;
+    deadlineInput.required = true;
+    applyCategoryMode('');
+    formTitleEl.textContent = '新增工作';
+    formHintEl.textContent = '填寫後按下方按鈕加入清單';
+    submitBtn.textContent = '加入工作清單';
+    cancelEditBtn.style.display = 'none';
+    panelEl.classList.remove('editing');
+  }
+
+  function startEdit(id){
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    editingId = id;
+    closeDayModal();
+    titleInput.value = t.title;
+    sourceInput.value = t.source || '';
+    categoryInput.value = t.category || '';
+    receivedInput.value = t.received;
+    if(t.deadline){
+      deadlineUnlimited.checked = false;
+      deadlineInput.disabled = false;
+      deadlineInput.required = true;
+      deadlineInput.value = t.deadline;
+    }else{
+      deadlineUnlimited.checked = true;
+      deadlineInput.disabled = true;
+      deadlineInput.required = false;
+      deadlineInput.value = '';
+    }
+    document.getElementById('u-' + t.urgency).checked = true;
+    applyCategoryMode(t.category || '');
+    formTitleEl.textContent = '編輯工作';
+    formHintEl.textContent = '修改內容後按下方按鈕儲存';
+    submitBtn.textContent = '儲存修改';
+    cancelEditBtn.style.display = 'block';
+    panelEl.classList.add('editing');
+    panelEl.scrollIntoView({ behavior:'smooth', block:'start' });
+    titleInput.focus();
+  }
+
+  cancelEditBtn.addEventListener('click', resetFormToAddMode);
+
+  // ---- form submit ----
+  document.getElementById('taskForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('title').value.trim();
+    const source = document.getElementById('source').value.trim();
+    const category = categoryInput.value;
+    const isSimple = SIMPLE_CATEGORIES.includes(category);
+    const received = receivedInput.value;
+    const isUnlimited = isSimple ? true : deadlineUnlimited.checked;
+    const deadline = isUnlimited ? null : deadlineInput.value;
+    const urgency = isSimple ? 'normal' : document.querySelector('input[name="urgency"]:checked').value;
+
+    if(!title || !received) return;
+    if(!isUnlimited && !deadline) return;
+
+    if(editingId){
+      // ---- edit existing task ----
+      const id = editingId;
+      const t = tasks.find(x => x.id === id);
+      if(!t) return;
+      const prev = { title:t.title, source:t.source, category:t.category, received:t.received, deadline:t.deadline, urgency:t.urgency };
+      t.title = title; t.source = source; t.category = category; t.received = received; t.deadline = deadline; t.urgency = urgency;
+      saveLocalBackup();
+      resetFormToAddMode();
+      renderAll();
+
+      const { error, missingCols } = await resilientWrite('update', { title, source, category, received, deadline, urgency }, id);
+      warnMissingColumns(missingCols);
+      if(error){
+        console.error('更新到 Supabase 失敗：', error);
+        alert('儲存修改失敗，請檢查網路連線或 Supabase 設定。');
+        Object.assign(t, prev);
+        saveLocalBackup();
+        renderAll();
+      }
+    }else{
+      // ---- add new task ----
+      const newTask = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+        title, source, category, received, deadline, urgency, done:false,
+        completedAt:null, completeNote:''
+      };
+      tasks.push(newTask);
+      saveLocalBackup();
+      resetFormToAddMode();
+      renderAll();
+
+      const { error, missingCols } = await resilientWrite('insert', {
+        id:newTask.id, title, source, category, received, deadline, urgency, done:false,
+        completed_at:null, complete_note:''
+      });
+      warnMissingColumns(missingCols);
+      if(error){
+        console.error('新增到 Supabase 失敗：', error);
+        alert('新增失敗，請檢查網路連線或 Supabase 設定。');
+        tasks = tasks.filter(t => t.id !== newTask.id);
+        saveLocalBackup();
+        renderAll();
+      }
+    }
+  });
+
+  // ---- shared action handling (list cards + modal cards) ----
+  // ---- mark-as-done modal ----
+  let pendingCompleteId = null;
+  const completeModalOverlay = document.getElementById('completeModalOverlay');
+  const completedAtInput = document.getElementById('completedAt');
+  const completeNoteInput = document.getElementById('completeNote');
+
+  function openCompleteModal(id){
+    pendingCompleteId = id;
+    completedAtInput.value = toLocalDateValue(new Date());
+    completeNoteInput.value = '';
+    completeModalOverlay.style.display = 'flex';
+  }
+  function closeCompleteModal(){
+    pendingCompleteId = null;
+    completeModalOverlay.style.display = 'none';
+  }
+
+  async function toggleDone(id){
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    if(!t.done){
+      // marking as done: collect completion date + optional note first
+      openCompleteModal(id);
+      return;
+    }
+    // un-marking: clear the completion details
+    const prev = { done:t.done, completedAt:t.completedAt, completeNote:t.completeNote };
+    t.done = false;
+    t.completedAt = null;
+    t.completeNote = '';
+    saveLocalBackup();
+    renderAll();
+    const { error, missingCols } = await resilientWrite('update', { done:false, completed_at:null, complete_note:null }, id);
+    warnMissingColumns(missingCols);
+    if(error){
+      console.error('更新 Supabase 失敗：', error);
+      alert('更新失敗，請檢查網路連線或 Supabase 設定。');
+      Object.assign(t, prev);
+      saveLocalBackup();
+      renderAll();
+    }
+  }
+
+  document.getElementById('completeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if(!pendingCompleteId) return;
+    const id = pendingCompleteId;
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    const completedAt = completedAtInput.value;
+    const completeNote = completeNoteInput.value.trim();
+    if(!completedAt) return;
+
+    const prev = { done:t.done, completedAt:t.completedAt, completeNote:t.completeNote };
+    t.done = true;
+    t.completedAt = completedAt;
+    t.completeNote = completeNote;
+    saveLocalBackup();
+    closeCompleteModal();
+    renderAll();
+
+    const { error, missingCols } = await resilientWrite('update', { done:true, completed_at:completedAt, complete_note:completeNote }, id);
+    warnMissingColumns(missingCols);
+    if(error){
+      console.error('更新 Supabase 失敗：', error);
+      alert('更新失敗，請檢查網路連線或 Supabase 設定。');
+      Object.assign(t, prev);
+      saveLocalBackup();
+      renderAll();
+    }
+  });
+  document.getElementById('completeModalClose').addEventListener('click', closeCompleteModal);
+  document.getElementById('completeCancelBtn').addEventListener('click', closeCompleteModal);
+  completeModalOverlay.addEventListener('click', (e) => {
+    if(e.target.id === 'completeModalOverlay') closeCompleteModal();
+  });
+
+  async function deleteTask(id){
+    if(!confirm('確定要刪除這筆工作紀錄嗎？')) return;
+    const removed = tasks.find(x => x.id === id);
+    tasks = tasks.filter(x => x.id !== id);
+    if(editingId === id) resetFormToAddMode();
+    saveLocalBackup();
+    renderAll();
+    const { error } = await sb.from(TABLE).delete().eq('id', id);
+    if(error){
+      console.error('刪除 Supabase 資料失敗：', error);
+      alert('刪除失敗，請檢查網路連線或 Supabase 設定。');
+      if(removed){ tasks.push(removed); saveLocalBackup(); renderAll(); }
+    }
+  }
+  document.addEventListener('click', (e) => {
+    const doneBtn = e.target.closest('.done-btn');
+    const editBtn = e.target.closest('.edit-btn');
+    const delBtn = e.target.closest('.del-btn');
+    if(doneBtn){ toggleDone(doneBtn.dataset.id); }
+    if(editBtn){ startEdit(editBtn.dataset.id); }
+    if(delBtn){ deleteTask(delBtn.dataset.id); }
+  });
+
+  // ---- filters ----
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    renderAll();
+  });
+  document.getElementById('filterSeg').addEventListener('click', (e) => {
+    if(e.target.tagName !== 'BUTTON') return;
+    filterMode = e.target.dataset.filter;
+    [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
+    renderAll();
+  });
+  document.getElementById('urgencySeg').addEventListener('click', (e) => {
+    if(e.target.tagName !== 'BUTTON') return;
+    urgencyFilter = e.target.dataset.urgency;
+    [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
+    renderAll();
+  });
+  document.getElementById('sourceFilter').addEventListener('change', (e) => {
+    sourceFilter = e.target.value;
+    renderAll();
+  });
+  document.getElementById('categoryFilter').addEventListener('change', (e) => {
+    categoryFilter = e.target.value;
+    renderAll();
+  });
+
+  // ---- calendar nav (month only) ----
+  document.getElementById('calPrev').addEventListener('click', () => {
+    calRefDate = new Date(calRefDate.getFullYear(), calRefDate.getMonth()-1, 1);
+    renderAll();
+  });
+  document.getElementById('calNext').addEventListener('click', () => {
+    calRefDate = new Date(calRefDate.getFullYear(), calRefDate.getMonth()+1, 1);
+    renderAll();
+  });
+  document.getElementById('calToday').addEventListener('click', () => {
+    calRefDate = new Date();
+    renderAll();
+  });
+
+  // ---- calendar cell & chip clicks ----
+  document.getElementById('calGrid').addEventListener('click', (e) => {
+    const cell = e.target.closest('.cal-day');
+    const key = e.target.dataset.key || (cell && cell.dataset.key);
+    if(key && ((cell && cell.classList.contains('has-tasks')) || e.target.classList.contains('chip') || e.target.classList.contains('more-link'))){
+      openDayModal(key);
+    }
+  });
+  document.getElementById('unscheduledBar').addEventListener('click', (e) => {
+    const key = e.target.dataset.key;
+    if(key) openDayModal(key);
+  });
+
+  // ---- modal close ----
+  document.getElementById('modalClose').addEventListener('click', closeDayModal);
+  document.getElementById('modalOverlay').addEventListener('click', (e) => {
+    if(e.target.id === 'modalOverlay') closeDayModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') closeDayModal();
+  });
+
+  // refresh periodically so overdue badges / calendar stay live
+  setInterval(renderAll, 60000);
+
+  (async function init(){
+    await load();
+    renderAll();
+  })();
+})();
+</script>
+</body>
+</html>
