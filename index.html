@@ -997,13 +997,14 @@
   // "法務" keeps the full rule set (received date + urgency + deadline).
   // All other categories only need a single work date; the task then just
   // shows up on that date in the calendar (no urgency picker, no deadline).
-  const SIMPLE_CATEGORIES = ['請假','會議','公差'];
+  // 除了「法務」維持完整規則外，其餘所有類別（含「不指定」）都只需要填工作時間
+  function isSimpleCategory(category){ return category !== '法務'; }
   const urgencyFieldEl = document.getElementById('urgencyField');
   const deadlineFieldEl = document.getElementById('deadlineField');
   const receivedLabelEl = document.getElementById('receivedLabel');
 
   function applyCategoryMode(category){
-    const isSimple = SIMPLE_CATEGORIES.includes(category);
+    const isSimple = isSimpleCategory(category);
     urgencyFieldEl.style.display = isSimple ? 'none' : '';
     deadlineFieldEl.style.display = isSimple ? 'none' : '';
     receivedLabelEl.textContent = isSimple ? '工作時間' : '收到工作的日期';
@@ -1213,7 +1214,7 @@
   // (請假/會議/公差) never use a deadline and already show up on their own date
   function renderUnscheduled(){
     const bar = document.getElementById('unscheduledBar');
-    const list = filteredTasks().filter(t => !t.deadline && !SIMPLE_CATEGORIES.includes(t.category));
+    const list = filteredTasks().filter(t => !t.deadline && !isSimpleCategory(t.category));
     if(list.length === 0){
       bar.style.display = 'none';
       bar.innerHTML = '';
@@ -1238,7 +1239,7 @@
     let list;
     if(modalDateKey === 'unlimited'){
       document.getElementById('modalTitle').textContent = '不限期限的工作';
-      list = filteredTasks().filter(t => !t.deadline && !SIMPLE_CATEGORIES.includes(t.category)).sort(compareByUrgency);
+      list = filteredTasks().filter(t => !t.deadline && !isSimpleCategory(t.category)).sort(compareByUrgency);
     }else{
       const [y,m,d] = modalDateKey.split('-').map(Number);
       const dObj = new Date(y, m-1, d);
@@ -1324,7 +1325,7 @@
     const title = document.getElementById('title').value.trim();
     const source = document.getElementById('source').value.trim();
     const category = categoryInput.value;
-    const isSimple = SIMPLE_CATEGORIES.includes(category);
+    const isSimple = isSimpleCategory(category);
     const received = receivedInput.value;
     const isUnlimited = isSimple ? true : deadlineUnlimited.checked;
     const deadline = isUnlimited ? null : deadlineInput.value;
