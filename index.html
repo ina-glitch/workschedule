@@ -440,6 +440,31 @@
   .actions .del-btn:hover{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
 
   /* ---- calendar ---- */
+
+  /* compact legend blended directly into a field, instead of a standalone card */
+  .field-legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 12px;
+    margin-top:8px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--muted);
+  }
+  .field-legend .legend-item{ display:inline-flex; align-items:center; gap:4px; }
+  .field-legend .swatch{ width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .field-legend .dot{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .field-legend .swatch.cat-leave{ background:#E4EEFC; }
+  .field-legend .swatch.cat-meeting{ background:#F1E9FB; }
+  .field-legend .swatch.cat-trip{ background:var(--amber-bg); }
+  .field-legend .swatch.cat-legal{ background:#FDEDF3; }
+  .field-legend .swatch.cat-none{ background:var(--low-bg); }
+  .field-legend .dot.dot-top{ background:var(--red); }
+  .field-legend .dot.dot-high{ background:var(--amber); }
+  .field-legend .dot.dot-normal{ background:var(--teal); }
+  .field-legend .dot.dot-note{ background:var(--muted); }
+
+
   .unscheduled-bar{
     display:none;
     align-items:center;
@@ -540,21 +565,41 @@
   .cal-day.today .num{ color:var(--teal-deep); }
 
   .chip{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
     font-size:10.5px;
     padding:2px 6px;
     border-radius:5px;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
     max-width:100%;
     flex-shrink:0;
     font-family:'IBM Plex Mono',monospace;
     cursor:pointer;
   }
-  .chip.u-top{ background:var(--red-bg); color:var(--red); }
-  .chip.u-high{ background:var(--amber-bg); color:#8a6415; }
-  .chip.u-normal{ background:var(--low-bg); color:var(--teal-deep); }
-  .chip.u-note{ background:var(--note-bg); color:var(--note-text); }
+  .chip .dot{
+    flex-shrink:0;
+    width:7px;
+    height:7px;
+    border-radius:50%;
+    display:inline-block;
+  }
+  .chip .dot.dot-top{ background:var(--red); }
+  .chip .dot.dot-high{ background:var(--amber); }
+  .chip .dot.dot-normal{ background:var(--teal); }
+  .chip .dot.dot-note{ background:var(--muted); }
+  .chip .label-text{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  /* chip background/color now reflects work category, not urgency */
+  .chip.cat-leave{ background:#E4EEFC; color:#2A5FA8; }
+  .chip.cat-meeting{ background:#F1E9FB; color:#6B3FA0; }
+  .chip.cat-trip{ background:var(--amber-bg); color:#8a6415; }
+  .chip.cat-legal{ background:#FDEDF3; color:#B0397A; }
+  .chip.cat-none{ background:var(--low-bg); color:var(--teal-deep); }
   .chip.done{ text-decoration:line-through; opacity:0.55; }
   .chip.chip-deadline{ font-weight:700; box-shadow:0 0 0 1px var(--red) inset; }
   .chip.chip-completed{ font-weight:700; box-shadow:0 0 0 1px var(--teal) inset; }
@@ -656,6 +701,7 @@
   <div class="panel">
     <h2 id="formTitle">新增工作</h2>
     <p class="hint" id="formHint">填寫後按下方按鈕加入清單</p>
+
     <form id="taskForm">
       <div class="field">
         <label for="title">工作名稱 / 內容說明</label>
@@ -676,17 +722,24 @@
           <option value="公差">公差</option>
           <option value="法務">法務</option>
         </select>
+        <div class="field-legend">
+          <span class="legend-item"><span class="swatch cat-leave"></span>請假</span>
+          <span class="legend-item"><span class="swatch cat-meeting"></span>會議</span>
+          <span class="legend-item"><span class="swatch cat-trip"></span>公差</span>
+          <span class="legend-item"><span class="swatch cat-legal"></span>法務</span>
+          <span class="legend-item"><span class="swatch cat-none"></span>未分類</span>
+        </div>
       </div>
 
       <div class="field">
-        <label for="received">收到工作的日期</label>
+        <label for="received" id="receivedLabel">收到工作的日期</label>
         <div class="row">
           <input type="date" id="received" required>
           <button type="button" id="nowBtn">今天</button>
         </div>
       </div>
 
-      <div class="field">
+      <div class="field" id="urgencyField">
         <label>緊急程度</label>
         <div class="urgency-picker">
           <input type="radio" name="urgency" id="u-top" value="top">
@@ -698,9 +751,15 @@
           <input type="radio" name="urgency" id="u-note" value="note">
           <label class="u-note" for="u-note">備註</label>
         </div>
+        <div class="field-legend">
+          <span class="legend-item"><span class="dot dot-top"></span>最急件</span>
+          <span class="legend-item"><span class="dot dot-high"></span>急件</span>
+          <span class="legend-item"><span class="dot dot-normal"></span>普通件</span>
+          <span class="legend-item"><span class="dot dot-note"></span>備註</span>
+        </div>
       </div>
 
-      <div class="field">
+      <div class="field" id="deadlineField">
         <label for="deadline">結案日期</label>
         <div class="row">
           <input type="date" id="deadline" required>
@@ -809,6 +868,43 @@
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const TABLE = 'tasks';
 
+  // Some fields (category / completed_at / complete_note) are newer additions.
+  // If the Supabase table hasn't had those columns added yet, PostgREST returns
+  // an "unknown column" error. Rather than failing the whole save, we detect
+  // that specific error, drop the offending column from the payload, and retry
+  // — so core fields still save even before the table is migrated.
+  function extractMissingColumn(error){
+    if(!error || !error.message) return null;
+    const m = /Could not find the '([\w]+)' column/i.exec(error.message)
+      || /column "?([\w]+)"? .*does not exist/i.exec(error.message);
+    return m ? m[1] : null;
+  }
+  async function resilientWrite(kind, payload, id){
+    let body = { ...payload };
+    let missingCols = [];
+    for(let attempt=0; attempt<6; attempt++){
+      const query = kind === 'insert'
+        ? sb.from(TABLE).insert(body)
+        : sb.from(TABLE).update(body).eq('id', id);
+      const { error } = await query;
+      if(!error) return { error:null, missingCols };
+      const col = extractMissingColumn(error);
+      if(col && col in body){
+        delete body[col];
+        missingCols.push(col);
+        continue;
+      }
+      return { error, missingCols };
+    }
+    return { error:new Error('儲存失敗，欄位不符'), missingCols };
+  }
+  let schemaWarningShown = false;
+  function warnMissingColumns(cols){
+    if(!cols || cols.length === 0 || schemaWarningShown) return;
+    schemaWarningShown = true;
+    console.warn('Supabase 資料表缺少欄位，已略過儲存：', cols.join(', '), '－ 請至 Supabase 新增這些欄位，否則相關資料只會暫存在本機，重新整理後可能消失。');
+  }
+
   const STORAGE_KEY = 'worklog.tasks.v1';
   const urgencyLabel = { top:'最急件', high:'急件', normal:'普通件', note:'備註' };
   const urgencyRank = { top:0, high:1, normal:2, note:3 };
@@ -874,6 +970,8 @@
     return div.innerHTML;
   }
 
+  const categoryInput = document.getElementById('category');
+
   // default received = today
   const receivedInput = document.getElementById('received');
   receivedInput.value = toLocalDateValue(new Date());
@@ -894,6 +992,31 @@
       deadlineInput.required = true;
     }
   });
+
+  // ---- category-driven form mode ----
+  // "法務" keeps the full rule set (received date + urgency + deadline).
+  // All other categories only need a single work date; the task then just
+  // shows up on that date in the calendar (no urgency picker, no deadline).
+  const SIMPLE_CATEGORIES = ['請假','會議','公差'];
+  const urgencyFieldEl = document.getElementById('urgencyField');
+  const deadlineFieldEl = document.getElementById('deadlineField');
+  const receivedLabelEl = document.getElementById('receivedLabel');
+
+  function applyCategoryMode(category){
+    const isSimple = SIMPLE_CATEGORIES.includes(category);
+    urgencyFieldEl.style.display = isSimple ? 'none' : '';
+    deadlineFieldEl.style.display = isSimple ? 'none' : '';
+    receivedLabelEl.textContent = isSimple ? '工作時間' : '收到工作的日期';
+    if(isSimple){
+      document.getElementById('u-normal').checked = true;
+      deadlineUnlimited.checked = true;
+      deadlineInput.value = '';
+      deadlineInput.disabled = true;
+      deadlineInput.required = false;
+    }
+  }
+  categoryInput.addEventListener('change', () => applyCategoryMode(categoryInput.value));
+  applyCategoryMode(categoryInput.value);
 
   function deadlineStatus(deadlineStr, done){
     if(done) return { key:'done' };
@@ -1033,12 +1156,21 @@
     return map;
   }
 
+  const categoryClassMap = { '請假':'cat-leave', '會議':'cat-meeting', '公差':'cat-trip', '法務':'cat-legal' };
+  function categoryClass(t){
+    return categoryClassMap[t.category] || 'cat-none';
+  }
+  function urgencyDotHtml(t){
+    return `<span class="dot dot-${t.urgency}"></span>`;
+  }
+
   function chipHtml(entry, cellKey){
     const t = entry.task;
-    let label = escapeHtml(t.title);
-    if(entry.tag === 'deadline') label = `🔥deadline ${label}`;
-    else if(entry.tag === 'completed') label = `✅已完成 ${label}`;
-    return `<span class="chip u-${t.urgency}${t.done?' done':''}${entry.tag==='deadline'?' chip-deadline':''}${entry.tag==='completed'?' chip-completed':''}" data-key="${cellKey}">${label}</span>`;
+    let prefix = '';
+    if(entry.tag === 'deadline') prefix = '🔥deadline ';
+    else if(entry.tag === 'completed') prefix = '✅已完成 ';
+    const label = `${prefix}${escapeHtml(t.title)}`;
+    return `<span class="chip ${categoryClass(t)}${t.done?' done':''}${entry.tag==='deadline'?' chip-deadline':''}${entry.tag==='completed'?' chip-completed':''}" data-key="${cellKey}">${urgencyDotHtml(t)}<span class="label-text">${label}</span></span>`;
   }
 
   function renderMonth(){
@@ -1083,334 +1215,4 @@
     if(list.length === 0){
       bar.style.display = 'none';
       bar.innerHTML = '';
-      return;
-    }
-    bar.style.display = 'flex';
-    bar.innerHTML = `<span class="label">不限期限：</span>` +
-      list.sort(compareByUrgency).map(t => `<span class="chip u-${t.urgency}${t.done?' done':''}" data-key="unlimited">${escapeHtml(t.title)}</span>`).join('');
-  }
-
-  function openDayModal(key){
-    modalDateKey = key;
-    renderModal();
-    document.getElementById('modalOverlay').style.display = 'flex';
-  }
-  function closeDayModal(){
-    modalDateKey = null;
-    document.getElementById('modalOverlay').style.display = 'none';
-  }
-  function renderModal(){
-    if(!modalDateKey) return;
-    let list;
-    if(modalDateKey === 'unlimited'){
-      document.getElementById('modalTitle').textContent = '不限期限的工作';
-      list = filteredTasks().filter(t => !t.deadline).sort(compareByUrgency);
-    }else{
-      const [y,m,d] = modalDateKey.split('-').map(Number);
-      const dObj = new Date(y, m-1, d);
-      document.getElementById('modalTitle').textContent = `${y}年${m}月${d}日 星期${weekdayNames[dObj.getDay()]}`;
-      list = filteredTasks().filter(t => t.received === modalDateKey || t.deadline === modalDateKey || t.completedAt === modalDateKey).sort(compareByUrgency);
-    }
-    const modalCards = document.getElementById('modalCards');
-    modalCards.innerHTML = list.length === 0
-      ? `<div class="modal-empty">這天沒有符合目前篩選條件的工作</div>`
-      : list.map(cardHtml).join('');
-  }
-
-  function renderAll(){
-    renderSourceOptions();
-    renderUnscheduled();
-    renderMonth();
-    renderStats();
-    if(modalDateKey) renderModal();
-  }
-
-  // ---- add / edit form helpers ----
-  const formTitleEl = document.getElementById('formTitle');
-  const formHintEl = document.getElementById('formHint');
-  const submitBtn = document.getElementById('submitBtn');
-  const cancelEditBtn = document.getElementById('cancelEditBtn');
-  const panelEl = document.querySelector('.panel');
-  const titleInput = document.getElementById('title');
-  const sourceInput = document.getElementById('source');
-  const categoryInput = document.getElementById('category');
-
-  function resetFormToAddMode(){
-    editingId = null;
-    document.getElementById('taskForm').reset();
-    receivedInput.value = toLocalDateValue(new Date());
-    document.getElementById('u-normal').checked = true;
-    categoryInput.value = '';
-    deadlineUnlimited.checked = false;
-    deadlineInput.disabled = false;
-    deadlineInput.required = true;
-    formTitleEl.textContent = '新增工作';
-    formHintEl.textContent = '填寫後按下方按鈕加入清單';
-    submitBtn.textContent = '加入工作清單';
-    cancelEditBtn.style.display = 'none';
-    panelEl.classList.remove('editing');
-  }
-
-  function startEdit(id){
-    const t = tasks.find(x => x.id === id);
-    if(!t) return;
-    editingId = id;
-    closeDayModal();
-    titleInput.value = t.title;
-    sourceInput.value = t.source || '';
-    categoryInput.value = t.category || '';
-    receivedInput.value = t.received;
-    if(t.deadline){
-      deadlineUnlimited.checked = false;
-      deadlineInput.disabled = false;
-      deadlineInput.required = true;
-      deadlineInput.value = t.deadline;
-    }else{
-      deadlineUnlimited.checked = true;
-      deadlineInput.disabled = true;
-      deadlineInput.required = false;
-      deadlineInput.value = '';
-    }
-    document.getElementById('u-' + t.urgency).checked = true;
-    formTitleEl.textContent = '編輯工作';
-    formHintEl.textContent = '修改內容後按下方按鈕儲存';
-    submitBtn.textContent = '儲存修改';
-    cancelEditBtn.style.display = 'block';
-    panelEl.classList.add('editing');
-    panelEl.scrollIntoView({ behavior:'smooth', block:'start' });
-    titleInput.focus();
-  }
-
-  cancelEditBtn.addEventListener('click', resetFormToAddMode);
-
-  // ---- form submit ----
-  document.getElementById('taskForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const title = document.getElementById('title').value.trim();
-    const source = document.getElementById('source').value.trim();
-    const category = categoryInput.value;
-    const received = receivedInput.value;
-    const isUnlimited = deadlineUnlimited.checked;
-    const deadline = isUnlimited ? null : deadlineInput.value;
-    const urgency = document.querySelector('input[name="urgency"]:checked').value;
-
-    if(!title || !received) return;
-    if(!isUnlimited && !deadline) return;
-
-    if(editingId){
-      // ---- edit existing task ----
-      const id = editingId;
-      const t = tasks.find(x => x.id === id);
-      if(!t) return;
-      const prev = { title:t.title, source:t.source, category:t.category, received:t.received, deadline:t.deadline, urgency:t.urgency };
-      t.title = title; t.source = source; t.category = category; t.received = received; t.deadline = deadline; t.urgency = urgency;
-      saveLocalBackup();
-      resetFormToAddMode();
-      renderAll();
-
-      const { error } = await sb.from(TABLE).update({ title, source, category, received, deadline, urgency }).eq('id', id);
-      if(error){
-        console.error('更新到 Supabase 失敗：', error);
-        alert('儲存修改失敗，請檢查網路連線或 Supabase 設定。');
-        Object.assign(t, prev);
-        saveLocalBackup();
-        renderAll();
-      }
-    }else{
-      // ---- add new task ----
-      const newTask = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-        title, source, category, received, deadline, urgency, done:false,
-        completedAt:null, completeNote:''
-      };
-      tasks.push(newTask);
-      saveLocalBackup();
-      resetFormToAddMode();
-      renderAll();
-
-      const { error } = await sb.from(TABLE).insert({
-        id:newTask.id, title, source, category, received, deadline, urgency, done:false,
-        completed_at:null, complete_note:''
-      });
-      if(error){
-        console.error('新增到 Supabase 失敗：', error);
-        alert('新增失敗，請檢查網路連線或 Supabase 設定。');
-        tasks = tasks.filter(t => t.id !== newTask.id);
-        saveLocalBackup();
-        renderAll();
-      }
-    }
-  });
-
-  // ---- shared action handling (list cards + modal cards) ----
-  // ---- mark-as-done modal ----
-  let pendingCompleteId = null;
-  const completeModalOverlay = document.getElementById('completeModalOverlay');
-  const completedAtInput = document.getElementById('completedAt');
-  const completeNoteInput = document.getElementById('completeNote');
-
-  function openCompleteModal(id){
-    pendingCompleteId = id;
-    completedAtInput.value = toLocalDateValue(new Date());
-    completeNoteInput.value = '';
-    completeModalOverlay.style.display = 'flex';
-  }
-  function closeCompleteModal(){
-    pendingCompleteId = null;
-    completeModalOverlay.style.display = 'none';
-  }
-
-  async function toggleDone(id){
-    const t = tasks.find(x => x.id === id);
-    if(!t) return;
-    if(!t.done){
-      // marking as done: collect completion date + optional note first
-      openCompleteModal(id);
-      return;
-    }
-    // un-marking: clear the completion details
-    const prev = { done:t.done, completedAt:t.completedAt, completeNote:t.completeNote };
-    t.done = false;
-    t.completedAt = null;
-    t.completeNote = '';
-    saveLocalBackup();
-    renderAll();
-    const { error } = await sb.from(TABLE).update({ done:false, completed_at:null, complete_note:null }).eq('id', id);
-    if(error){
-      console.error('更新 Supabase 失敗：', error);
-      alert('更新失敗，請檢查網路連線或 Supabase 設定。');
-      Object.assign(t, prev);
-      saveLocalBackup();
-      renderAll();
-    }
-  }
-
-  document.getElementById('completeForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if(!pendingCompleteId) return;
-    const id = pendingCompleteId;
-    const t = tasks.find(x => x.id === id);
-    if(!t) return;
-    const completedAt = completedAtInput.value;
-    const completeNote = completeNoteInput.value.trim();
-    if(!completedAt) return;
-
-    const prev = { done:t.done, completedAt:t.completedAt, completeNote:t.completeNote };
-    t.done = true;
-    t.completedAt = completedAt;
-    t.completeNote = completeNote;
-    saveLocalBackup();
-    closeCompleteModal();
-    renderAll();
-
-    const { error } = await sb.from(TABLE).update({ done:true, completed_at:completedAt, complete_note:completeNote }).eq('id', id);
-    if(error){
-      console.error('更新 Supabase 失敗：', error);
-      alert('更新失敗，請檢查網路連線或 Supabase 設定。');
-      Object.assign(t, prev);
-      saveLocalBackup();
-      renderAll();
-    }
-  });
-  document.getElementById('completeModalClose').addEventListener('click', closeCompleteModal);
-  document.getElementById('completeCancelBtn').addEventListener('click', closeCompleteModal);
-  completeModalOverlay.addEventListener('click', (e) => {
-    if(e.target.id === 'completeModalOverlay') closeCompleteModal();
-  });
-
-  async function deleteTask(id){
-    if(!confirm('確定要刪除這筆工作紀錄嗎？')) return;
-    const removed = tasks.find(x => x.id === id);
-    tasks = tasks.filter(x => x.id !== id);
-    if(editingId === id) resetFormToAddMode();
-    saveLocalBackup();
-    renderAll();
-    const { error } = await sb.from(TABLE).delete().eq('id', id);
-    if(error){
-      console.error('刪除 Supabase 資料失敗：', error);
-      alert('刪除失敗，請檢查網路連線或 Supabase 設定。');
-      if(removed){ tasks.push(removed); saveLocalBackup(); renderAll(); }
-    }
-  }
-  document.addEventListener('click', (e) => {
-    const doneBtn = e.target.closest('.done-btn');
-    const editBtn = e.target.closest('.edit-btn');
-    const delBtn = e.target.closest('.del-btn');
-    if(doneBtn){ toggleDone(doneBtn.dataset.id); }
-    if(editBtn){ startEdit(editBtn.dataset.id); }
-    if(delBtn){ deleteTask(delBtn.dataset.id); }
-  });
-
-  // ---- filters ----
-  document.getElementById('searchInput').addEventListener('input', (e) => {
-    searchQuery = e.target.value;
-    renderAll();
-  });
-  document.getElementById('filterSeg').addEventListener('click', (e) => {
-    if(e.target.tagName !== 'BUTTON') return;
-    filterMode = e.target.dataset.filter;
-    [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
-    renderAll();
-  });
-  document.getElementById('urgencySeg').addEventListener('click', (e) => {
-    if(e.target.tagName !== 'BUTTON') return;
-    urgencyFilter = e.target.dataset.urgency;
-    [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
-    renderAll();
-  });
-  document.getElementById('sourceFilter').addEventListener('change', (e) => {
-    sourceFilter = e.target.value;
-    renderAll();
-  });
-  document.getElementById('categoryFilter').addEventListener('change', (e) => {
-    categoryFilter = e.target.value;
-    renderAll();
-  });
-
-  // ---- calendar nav (month only) ----
-  document.getElementById('calPrev').addEventListener('click', () => {
-    calRefDate = new Date(calRefDate.getFullYear(), calRefDate.getMonth()-1, 1);
-    renderAll();
-  });
-  document.getElementById('calNext').addEventListener('click', () => {
-    calRefDate = new Date(calRefDate.getFullYear(), calRefDate.getMonth()+1, 1);
-    renderAll();
-  });
-  document.getElementById('calToday').addEventListener('click', () => {
-    calRefDate = new Date();
-    renderAll();
-  });
-
-  // ---- calendar cell & chip clicks ----
-  document.getElementById('calGrid').addEventListener('click', (e) => {
-    const cell = e.target.closest('.cal-day');
-    const key = e.target.dataset.key || (cell && cell.dataset.key);
-    if(key && ((cell && cell.classList.contains('has-tasks')) || e.target.classList.contains('chip') || e.target.classList.contains('more-link'))){
-      openDayModal(key);
-    }
-  });
-  document.getElementById('unscheduledBar').addEventListener('click', (e) => {
-    const key = e.target.dataset.key;
-    if(key) openDayModal(key);
-  });
-
-  // ---- modal close ----
-  document.getElementById('modalClose').addEventListener('click', closeDayModal);
-  document.getElementById('modalOverlay').addEventListener('click', (e) => {
-    if(e.target.id === 'modalOverlay') closeDayModal();
-  });
-  document.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape') closeDayModal();
-  });
-
-  // refresh periodically so overdue badges / calendar stay live
-  setInterval(renderAll, 60000);
-
-  (async function init(){
-    await load();
-    renderAll();
-  })();
-})();
-</script>
-</body>
-</html>
+   
