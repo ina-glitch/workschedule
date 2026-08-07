@@ -389,6 +389,22 @@
     color:#4A4FB0;
     font-weight:600;
   }
+  .meta .category{
+    padding:2px 8px;
+    border-radius:20px;
+    background:#FDEDF3;
+    color:#B0397A;
+    font-weight:600;
+  }
+  .meta .complete-note{
+    flex-basis:100%;
+    color:var(--ink-soft);
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    background:var(--low-bg);
+    border-radius:8px;
+    padding:6px 10px;
+  }
 
   .badge{
     padding:2px 9px;
@@ -427,21 +443,27 @@
   .unscheduled-bar{
     display:none;
     align-items:center;
-    gap:8px;
+    gap:10px;
     flex-wrap:wrap;
     background:var(--card);
     border:1px solid var(--line);
     border-radius:10px;
-    padding:10px 12px;
+    padding:16px 18px;
     margin-bottom:14px;
   }
   .unscheduled-bar .label{
     font-family:'IBM Plex Mono',monospace;
-    font-size:11px;
+    font-size:13px;
+    font-weight:600;
     color:var(--muted);
-    margin-right:2px;
+    margin-right:4px;
   }
-  .unscheduled-bar .chip{ cursor:pointer; }
+  .unscheduled-bar .chip{
+    cursor:pointer;
+    font-size:13px;
+    padding:6px 12px;
+    border-radius:7px;
+  }
 
   .cal-nav{
     display:flex;
@@ -535,6 +557,7 @@
   .chip.u-note{ background:var(--note-bg); color:var(--note-text); }
   .chip.done{ text-decoration:line-through; opacity:0.55; }
   .chip.chip-deadline{ font-weight:700; box-shadow:0 0 0 1px var(--red) inset; }
+  .chip.chip-completed{ font-weight:700; box-shadow:0 0 0 1px var(--teal) inset; }
   .more-link{
     font-size:10px;
     color:var(--muted);
@@ -582,6 +605,16 @@
   .modal-close:hover{ background:var(--low-bg); }
   .modal-box .cards{ gap:10px; }
   .modal-empty{ color:var(--muted); font-size:13px; text-align:center; padding:20px 0; }
+
+  .complete-modal-box{ max-width:420px; }
+  .complete-modal-box .field{ margin-bottom:14px; }
+  .complete-modal-actions{
+    display:flex;
+    gap:10px;
+    margin-top:4px;
+  }
+  .complete-modal-actions .cancel-edit-btn{ margin-top:0; }
+  .complete-modal-actions button{ flex:1; }
 
   @media (max-width:880px){
     .layout{ grid-template-columns:1fr; }
@@ -632,6 +665,17 @@
       <div class="field">
         <label for="source">工作來源</label>
         <input type="text" id="source" placeholder="例：主管指派、客戶來信、系統派工">
+      </div>
+
+      <div class="field">
+        <label for="category">工作類別</label>
+        <select id="category">
+          <option value="">不指定</option>
+          <option value="請假">請假</option>
+          <option value="會議">會議</option>
+          <option value="公差">公差</option>
+          <option value="法務">法務</option>
+        </select>
       </div>
 
       <div class="field">
@@ -690,6 +734,14 @@
         <select id="sourceFilter" class="source-select">
           <option value="all">全部來源</option>
         </select>
+        <select id="categoryFilter" class="source-select">
+          <option value="all">全部類別</option>
+          <option value="請假">請假</option>
+          <option value="會議">會議</option>
+          <option value="公差">公差</option>
+          <option value="法務">法務</option>
+          <option value="none">未分類</option>
+        </select>
       </div>
     </div>
 
@@ -724,6 +776,30 @@
   </div>
 </div>
 
+<!-- mark-as-done modal -->
+<div class="modal-overlay" id="completeModalOverlay" style="display:none;">
+  <div class="modal-box complete-modal-box">
+    <div class="modal-head">
+      <h3>標記完成</h3>
+      <button class="modal-close" id="completeModalClose">✕</button>
+    </div>
+    <form id="completeForm">
+      <div class="field">
+        <label for="completedAt">完成時間</label>
+        <input type="date" id="completedAt" required>
+      </div>
+      <div class="field">
+        <label for="completeNote">說明欄（選填）</label>
+        <textarea id="completeNote" placeholder="補充說明，例如交付結果、備註事項..."></textarea>
+      </div>
+      <div class="complete-modal-actions">
+        <button type="button" class="cancel-edit-btn" id="completeCancelBtn">取消</button>
+        <button type="submit" class="submit-btn">確認完成</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
@@ -743,6 +819,7 @@
   let searchQuery = '';
   let urgencyFilter = 'all';
   let sourceFilter = 'all';
+  let categoryFilter = 'all';
   let calRefDate = new Date();
   let modalDateKey = null;
   let editingId = null;
@@ -754,6 +831,9 @@
       tasks = data || [];
       tasks.forEach(t => {
         if(t.source === undefined || t.source === null) t.source = '';
+        if(t.category === undefined || t.category === null) t.category = '';
+        t.completedAt = t.completed_at || null;
+        t.completeNote = t.complete_note || '';
         // migrate old urgency values (high/mid/low) to new scheme
         if(t.urgency === 'mid') t.urgency = 'normal';
         if(t.urgency === 'low') t.urgency = 'note';
@@ -833,6 +913,8 @@
     if(filterMode === 'done') list = list.filter(t => t.done);
     if(urgencyFilter !== 'all') list = list.filter(t => t.urgency === urgencyFilter);
     if(sourceFilter !== 'all') list = list.filter(t => (t.source || '(未填寫來源)') === sourceFilter);
+    if(categoryFilter === 'none') list = list.filter(t => !t.category);
+    else if(categoryFilter !== 'all') list = list.filter(t => t.category === categoryFilter);
     if(searchQuery){
       const q = searchQuery.trim().toLowerCase();
       if(q) list = list.filter(t =>
@@ -868,6 +950,13 @@
       else badgeHtml = `<span class="badge ok">${status.label}</span>`;
     }
     const sourceHtml = t.source ? `<span class="source">來源：${escapeHtml(t.source)}</span>` : '';
+    const categoryHtml = t.category ? `<span class="category">類別：${escapeHtml(t.category)}</span>` : '';
+    const completeInfoHtml = t.done && t.completedAt
+      ? `<span class="badge ok">✅ 完成：${fmtDate(t.completedAt)}</span>`
+      : '';
+    const completeNoteHtml = t.done && t.completeNote
+      ? `<span class="complete-note">說明：${escapeHtml(t.completeNote)}</span>`
+      : '';
     return `
       <div class="card u-${t.urgency}${t.done ? ' done' : ''}">
         <div class="stripe"></div>
@@ -875,10 +964,13 @@
           <p class="title">${escapeHtml(t.title)}</p>
           <div class="meta">
             <span class="tag u-${t.urgency}">${urgencyLabel[t.urgency]}</span>
+            ${categoryHtml}
             ${sourceHtml}
             <span>收到：${fmtDate(t.received)}</span>
             <span>結案：${fmtDate(t.deadline)}</span>
             ${badgeHtml}
+            ${completeInfoHtml}
+            ${completeNoteHtml}
           </div>
         </div>
         <div class="actions">
@@ -918,11 +1010,23 @@
       (map[key] = map[key] || []).push(entry);
     }
     list.forEach(t => {
-      if(t.deadline && t.deadline === t.received){
-        push(t.received, { task:t, isDeadline:true });
+      if(!t.deadline){
+        push(t.received, { task:t, tag:'received' });
+        return;
+      }
+      // if completed before the deadline, show the "second" occurrence on the
+      // completion date instead of the deadline date
+      let secondDate = t.deadline;
+      let tag = 'deadline';
+      if(t.done && t.completedAt && t.completedAt < t.deadline){
+        secondDate = t.completedAt;
+        tag = 'completed';
+      }
+      if(secondDate === t.received){
+        push(t.received, { task:t, tag });
       }else{
-        push(t.received, { task:t, isDeadline:false });
-        if(t.deadline) push(t.deadline, { task:t, isDeadline:true });
+        push(t.received, { task:t, tag:'received' });
+        push(secondDate, { task:t, tag });
       }
     });
     Object.values(map).forEach(arr => arr.sort((a,b) => compareByUrgency(a.task,b.task)));
@@ -931,8 +1035,10 @@
 
   function chipHtml(entry, cellKey){
     const t = entry.task;
-    const label = entry.isDeadline ? `🔥deadline ${escapeHtml(t.title)}` : escapeHtml(t.title);
-    return `<span class="chip u-${t.urgency}${t.done?' done':''}${entry.isDeadline?' chip-deadline':''}" data-key="${cellKey}">${label}</span>`;
+    let label = escapeHtml(t.title);
+    if(entry.tag === 'deadline') label = `🔥deadline ${label}`;
+    else if(entry.tag === 'completed') label = `✅已完成 ${label}`;
+    return `<span class="chip u-${t.urgency}${t.done?' done':''}${entry.tag==='deadline'?' chip-deadline':''}${entry.tag==='completed'?' chip-completed':''}" data-key="${cellKey}">${label}</span>`;
   }
 
   function renderMonth(){
@@ -1003,7 +1109,7 @@
       const [y,m,d] = modalDateKey.split('-').map(Number);
       const dObj = new Date(y, m-1, d);
       document.getElementById('modalTitle').textContent = `${y}年${m}月${d}日 星期${weekdayNames[dObj.getDay()]}`;
-      list = filteredTasks().filter(t => t.received === modalDateKey || t.deadline === modalDateKey).sort(compareByUrgency);
+      list = filteredTasks().filter(t => t.received === modalDateKey || t.deadline === modalDateKey || t.completedAt === modalDateKey).sort(compareByUrgency);
     }
     const modalCards = document.getElementById('modalCards');
     modalCards.innerHTML = list.length === 0
@@ -1027,12 +1133,14 @@
   const panelEl = document.querySelector('.panel');
   const titleInput = document.getElementById('title');
   const sourceInput = document.getElementById('source');
+  const categoryInput = document.getElementById('category');
 
   function resetFormToAddMode(){
     editingId = null;
     document.getElementById('taskForm').reset();
     receivedInput.value = toLocalDateValue(new Date());
     document.getElementById('u-normal').checked = true;
+    categoryInput.value = '';
     deadlineUnlimited.checked = false;
     deadlineInput.disabled = false;
     deadlineInput.required = true;
@@ -1050,6 +1158,7 @@
     closeDayModal();
     titleInput.value = t.title;
     sourceInput.value = t.source || '';
+    categoryInput.value = t.category || '';
     receivedInput.value = t.received;
     if(t.deadline){
       deadlineUnlimited.checked = false;
@@ -1079,6 +1188,7 @@
     e.preventDefault();
     const title = document.getElementById('title').value.trim();
     const source = document.getElementById('source').value.trim();
+    const category = categoryInput.value;
     const received = receivedInput.value;
     const isUnlimited = deadlineUnlimited.checked;
     const deadline = isUnlimited ? null : deadlineInput.value;
@@ -1092,13 +1202,13 @@
       const id = editingId;
       const t = tasks.find(x => x.id === id);
       if(!t) return;
-      const prev = { title:t.title, source:t.source, received:t.received, deadline:t.deadline, urgency:t.urgency };
-      t.title = title; t.source = source; t.received = received; t.deadline = deadline; t.urgency = urgency;
+      const prev = { title:t.title, source:t.source, category:t.category, received:t.received, deadline:t.deadline, urgency:t.urgency };
+      t.title = title; t.source = source; t.category = category; t.received = received; t.deadline = deadline; t.urgency = urgency;
       saveLocalBackup();
       resetFormToAddMode();
       renderAll();
 
-      const { error } = await sb.from(TABLE).update({ title, source, received, deadline, urgency }).eq('id', id);
+      const { error } = await sb.from(TABLE).update({ title, source, category, received, deadline, urgency }).eq('id', id);
       if(error){
         console.error('更新到 Supabase 失敗：', error);
         alert('儲存修改失敗，請檢查網路連線或 Supabase 設定。');
@@ -1110,14 +1220,18 @@
       // ---- add new task ----
       const newTask = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-        title, source, received, deadline, urgency, done:false
+        title, source, category, received, deadline, urgency, done:false,
+        completedAt:null, completeNote:''
       };
       tasks.push(newTask);
       saveLocalBackup();
       resetFormToAddMode();
       renderAll();
 
-      const { error } = await sb.from(TABLE).insert(newTask);
+      const { error } = await sb.from(TABLE).insert({
+        id:newTask.id, title, source, category, received, deadline, urgency, done:false,
+        completed_at:null, complete_note:''
+      });
       if(error){
         console.error('新增到 Supabase 失敗：', error);
         alert('新增失敗，請檢查網路連線或 Supabase 設定。');
@@ -1129,22 +1243,81 @@
   });
 
   // ---- shared action handling (list cards + modal cards) ----
+  // ---- mark-as-done modal ----
+  let pendingCompleteId = null;
+  const completeModalOverlay = document.getElementById('completeModalOverlay');
+  const completedAtInput = document.getElementById('completedAt');
+  const completeNoteInput = document.getElementById('completeNote');
+
+  function openCompleteModal(id){
+    pendingCompleteId = id;
+    completedAtInput.value = toLocalDateValue(new Date());
+    completeNoteInput.value = '';
+    completeModalOverlay.style.display = 'flex';
+  }
+  function closeCompleteModal(){
+    pendingCompleteId = null;
+    completeModalOverlay.style.display = 'none';
+  }
+
   async function toggleDone(id){
     const t = tasks.find(x => x.id === id);
     if(!t) return;
-    const prev = t.done;
-    t.done = !t.done;
+    if(!t.done){
+      // marking as done: collect completion date + optional note first
+      openCompleteModal(id);
+      return;
+    }
+    // un-marking: clear the completion details
+    const prev = { done:t.done, completedAt:t.completedAt, completeNote:t.completeNote };
+    t.done = false;
+    t.completedAt = null;
+    t.completeNote = '';
     saveLocalBackup();
     renderAll();
-    const { error } = await sb.from(TABLE).update({ done: t.done }).eq('id', id);
+    const { error } = await sb.from(TABLE).update({ done:false, completed_at:null, complete_note:null }).eq('id', id);
     if(error){
       console.error('更新 Supabase 失敗：', error);
       alert('更新失敗，請檢查網路連線或 Supabase 設定。');
-      t.done = prev;
+      Object.assign(t, prev);
       saveLocalBackup();
       renderAll();
     }
   }
+
+  document.getElementById('completeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if(!pendingCompleteId) return;
+    const id = pendingCompleteId;
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    const completedAt = completedAtInput.value;
+    const completeNote = completeNoteInput.value.trim();
+    if(!completedAt) return;
+
+    const prev = { done:t.done, completedAt:t.completedAt, completeNote:t.completeNote };
+    t.done = true;
+    t.completedAt = completedAt;
+    t.completeNote = completeNote;
+    saveLocalBackup();
+    closeCompleteModal();
+    renderAll();
+
+    const { error } = await sb.from(TABLE).update({ done:true, completed_at:completedAt, complete_note:completeNote }).eq('id', id);
+    if(error){
+      console.error('更新 Supabase 失敗：', error);
+      alert('更新失敗，請檢查網路連線或 Supabase 設定。');
+      Object.assign(t, prev);
+      saveLocalBackup();
+      renderAll();
+    }
+  });
+  document.getElementById('completeModalClose').addEventListener('click', closeCompleteModal);
+  document.getElementById('completeCancelBtn').addEventListener('click', closeCompleteModal);
+  completeModalOverlay.addEventListener('click', (e) => {
+    if(e.target.id === 'completeModalOverlay') closeCompleteModal();
+  });
+
   async function deleteTask(id){
     if(!confirm('確定要刪除這筆工作紀錄嗎？')) return;
     const removed = tasks.find(x => x.id === id);
@@ -1187,6 +1360,10 @@
   });
   document.getElementById('sourceFilter').addEventListener('change', (e) => {
     sourceFilter = e.target.value;
+    renderAll();
+  });
+  document.getElementById('categoryFilter').addEventListener('change', (e) => {
+    categoryFilter = e.target.value;
     renderAll();
   });
 
