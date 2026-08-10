@@ -94,22 +94,29 @@
 
   .layout{
     display:grid;
-    grid-template-columns:340px 1fr;
+    grid-template-columns:320px 1fr;
     gap:0;
     align-items:start;
     max-width:1320px;
     margin:0 auto;
   }
 
-  /* ---- form panel ---- */
-  .panel{
+  /* ---- work summary sidebar ---- */
+  .summary-sidebar{
     border-right:1px solid var(--line);
-    padding:28px 24px;
+    padding:28px 20px;
     position:sticky;
     top:73px;
     height:calc(100vh - 73px);
     overflow-y:auto;
   }
+
+  /* ---- form panel (now rendered inside a modal) ---- */
+  .panel{
+    padding:2px 2px 4px;
+  }
+  .modal-box.task-modal-box{ max-width:460px; }
+  .task-modal-box .modal-head{ align-items:flex-start; }
   .panel h2{
     font-family:'Space Grotesk',sans-serif;
     font-size:15px;
@@ -262,6 +269,21 @@
     margin:0;
   }
   .controls{ display:flex; gap:8px; flex-wrap:wrap; }
+  .add-task-btn{
+    border:none;
+    background:var(--ink);
+    color:#fff;
+    border-radius:7px;
+    padding:0 16px;
+    height:32px;
+    font-size:12.5px;
+    font-weight:600;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+    transition:background .15s ease;
+  }
+  .add-task-btn:hover{ background:var(--teal-deep); }
+
   .seg{
     display:flex;
     border:1px solid var(--line);
@@ -310,6 +332,121 @@
   }
   .search-input:focus{ outline:none; border-color:var(--teal); }
   .search-input::placeholder{ color:var(--muted); }
+
+  /* ---- work summary ---- */
+  .summary-section{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+    margin-bottom:22px;
+  }
+  .summary-col{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:16px 18px;
+  }
+  .summary-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .summary-head h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:14.5px;
+    margin:0;
+  }
+  .summary-range{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--muted);
+  }
+  .summary-list{ display:flex; flex-direction:column; gap:8px; }
+  .summary-empty{
+    color:var(--muted);
+    font-size:12.5px;
+    text-align:center;
+    padding:18px 0;
+  }
+  .summary-item{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:5px 8px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:9px 10px;
+  }
+  .summary-item .dot{
+    flex-shrink:0;
+    width:8px; height:8px;
+    border-radius:50%;
+  }
+  .summary-item .si-title{
+    flex:1 1 100%;
+    min-width:0;
+    font-size:13px;
+    font-weight:600;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    margin-left:2px;
+  }
+  .summary-item .si-meta{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:5px;
+    flex:1 1 auto;
+    min-width:0;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--muted);
+  }
+  .summary-item .si-date{ white-space:nowrap; }
+  .summary-item .si-actions{ display:flex; gap:4px; flex-shrink:0; margin-left:auto; }
+  .summary-item .si-actions button{
+    border:1px solid var(--line);
+    background:var(--card);
+    border-radius:6px;
+    padding:4px 8px;
+    font-size:10.5px;
+    font-family:'Inter',sans-serif;
+    font-weight:500;
+    cursor:pointer;
+    color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  .summary-item .si-actions .done-btn:hover{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
+  .summary-item .si-actions .edit-btn:hover{ background:#EEF0FB; border-color:#4A4FB0; color:#4A4FB0; }
+
+
+  .overdue-group{ margin-bottom:14px; }
+  .overdue-group:last-child{ margin-bottom:0; }
+  .og-head{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:8px;
+    padding-bottom:6px;
+    border-bottom:1px dashed var(--line);
+  }
+  .og-head .og-count{
+    background:var(--red-bg);
+    color:var(--red);
+    font-weight:700;
+    border-radius:20px;
+    padding:1px 8px;
+    font-size:10.5px;
+  }
+  .og-list{ display:flex; flex-direction:column; gap:8px; }
 
   .empty{
     border:1px dashed var(--line);
@@ -663,12 +800,13 @@
 
   @media (max-width:880px){
     .layout{ grid-template-columns:1fr; }
-    .panel{
+    .summary-sidebar{
       position:static;
       height:auto;
       border-right:none;
       border-bottom:1px solid var(--line);
     }
+    .summary-item{ flex-wrap:wrap; }
     .card{
       grid-template-columns:5px 1fr;
     }
@@ -696,11 +834,16 @@
   </div>
 </div>
 
-<div class="layout">
-  <!-- FORM -->
-  <div class="panel">
-    <h2 id="formTitle">新增工作</h2>
-    <p class="hint" id="formHint">填寫後按下方按鈕加入清單</p>
+<!-- add / edit task modal -->
+<div class="modal-overlay" id="taskModalOverlay" style="display:none;">
+  <div class="modal-box task-modal-box panel">
+    <div class="modal-head">
+      <div>
+        <h2 id="formTitle" style="margin:0 0 4px;">新增工作</h2>
+        <p class="hint" id="formHint" style="margin:0;">填寫後按下方按鈕加入清單</p>
+      </div>
+      <button type="button" class="modal-close" id="taskModalClose">✕</button>
+    </div>
 
     <form id="taskForm">
       <div class="field">
@@ -771,12 +914,35 @@
       <button type="button" class="cancel-edit-btn" id="cancelEditBtn" style="display:none;">取消編輯</button>
     </form>
   </div>
+</div>
+
+<div class="layout">
+  <!-- SUMMARY SIDEBAR -->
+  <div class="summary-sidebar">
+    <div class="summary-section">
+      <div class="summary-col">
+        <div class="summary-head">
+          <h2>本週代辦工作</h2>
+          <span class="summary-range" id="thisWeekRange"></span>
+        </div>
+        <div class="summary-list" id="thisWeekList"></div>
+      </div>
+      <div class="summary-col">
+        <div class="summary-head">
+          <h2>未完成的工作項目</h2>
+          <span class="summary-range">過去週數</span>
+        </div>
+        <div class="summary-groups" id="overdueGroups"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- MAIN -->
   <div class="main">
     <div class="list-head">
       <h1>所有工作</h1>
       <div class="controls">
+        <button type="button" class="add-task-btn" id="openAddTaskBtn">＋ 新增工作</button>
         <input type="search" id="searchInput" class="search-input" placeholder="🔍 搜尋工作名稱或來源">
         <div class="seg" id="filterSeg">
           <button data-filter="active">進行中</button>
@@ -1258,7 +1424,95 @@
     renderUnscheduled();
     renderMonth();
     renderStats();
+    renderSummary();
     if(modalDateKey) renderModal();
+  }
+
+  // ---- work summary (this week / overdue-by-week) ----
+  function getMonday(d){
+    const m = new Date(d);
+    m.setHours(0,0,0,0);
+    const day = m.getDay(); // 0=Sun..6=Sat
+    const diff = day === 0 ? -6 : 1 - day;
+    m.setDate(m.getDate() + diff);
+    return m;
+  }
+  function weekNumberOfMonth(monday){
+    return Math.floor((monday.getDate() - 1) / 7) + 1;
+  }
+  function fmtMD(d){ return `${d.getMonth()+1}/${d.getDate()}`; }
+
+  function summaryItemHtml(t){
+    const relStr = t.deadline || t.received;
+    const isSimple = isSimpleCategory(t.category);
+    const catHtml = t.category ? `<span class="category">${escapeHtml(t.category)}</span>` : '';
+    const urgencyHtml = isSimple ? '' : `<span class="tag u-${t.urgency}">${urgencyLabel[t.urgency]}</span>`;
+    const dotUrgency = isSimple ? 'normal' : t.urgency;
+    return `
+      <div class="summary-item">
+        <span class="dot dot-${dotUrgency}"></span>
+        <span class="si-title">${escapeHtml(t.title)}</span>
+        <span class="si-meta">${catHtml}${urgencyHtml}<span class="si-date">${fmtDate(relStr)}</span></span>
+        <span class="si-actions">
+          <button class="done-btn" data-id="${t.id}">完成</button>
+          <button class="edit-btn" data-id="${t.id}">編輯</button>
+        </span>
+      </div>`;
+  }
+
+  function renderSummary(){
+    const todayMonday = getMonday(new Date());
+    const weekEnd = new Date(todayMonday);
+    weekEnd.setDate(todayMonday.getDate() + 6);
+    document.getElementById('thisWeekRange').textContent = `${fmtMD(todayMonday)} - ${fmtMD(weekEnd)}`;
+
+    const pending = tasks.filter(t => !t.done);
+    const thisWeekList = [];
+    const overdueMap = {};
+
+    pending.forEach(t => {
+      const relStr = t.deadline || t.received;
+      if(!relStr) return;
+      const relDate = parseDateLocal(relStr);
+      const mon = getMonday(relDate);
+      if(mon.getTime() === todayMonday.getTime()){
+        thisWeekList.push(t);
+      }else if(mon.getTime() < todayMonday.getTime()){
+        const y = mon.getFullYear(), m = mon.getMonth() + 1;
+        const key = y + '-' + m;
+        if(!overdueMap[key]) overdueMap[key] = { year:y, month:m, weeks:new Set(), tasks:[], sortTime:new Date(y, m-1, 1).getTime() };
+        overdueMap[key].weeks.add(weekNumberOfMonth(mon));
+        overdueMap[key].tasks.push(t);
+      }
+    });
+
+    thisWeekList.sort((a,b) => {
+      const da = a.deadline || a.received, db = b.deadline || b.received;
+      return da === db ? urgencyRank[a.urgency] - urgencyRank[b.urgency] : (da < db ? -1 : 1);
+    });
+    document.getElementById('thisWeekList').innerHTML = thisWeekList.length
+      ? thisWeekList.map(summaryItemHtml).join('')
+      : `<div class="summary-empty">本週沒有待辦工作 🎉</div>`;
+
+    const groups = Object.values(overdueMap).sort((a,b) => b.sortTime - a.sortTime);
+    const groupsHtml = groups.map(g => {
+      const weeksArr = Array.from(g.weeks).sort((x,y) => x - y);
+      const weekLabel = weeksArr.length > 1
+        ? `第${weeksArr[0]}~${weeksArr[weeksArr.length-1]}週`
+        : `第${weeksArr[0]}週`;
+      const tasksSorted = g.tasks.sort((a,b) => {
+        const da = a.deadline || a.received, db = b.deadline || b.received;
+        return da === db ? urgencyRank[a.urgency] - urgencyRank[b.urgency] : (da < db ? -1 : 1);
+      });
+      return `
+        <div class="overdue-group">
+          <div class="og-head">${g.month}月 ${weekLabel}<span class="og-count">${tasksSorted.length}</span></div>
+          <div class="og-list">${tasksSorted.map(summaryItemHtml).join('')}</div>
+        </div>`;
+    }).join('');
+    document.getElementById('overdueGroups').innerHTML = groups.length
+      ? groupsHtml
+      : `<div class="summary-empty">沒有未完成的過期工作 🎉</div>`;
   }
 
   // ---- add / edit form helpers ----
@@ -1266,9 +1520,18 @@
   const formHintEl = document.getElementById('formHint');
   const submitBtn = document.getElementById('submitBtn');
   const cancelEditBtn = document.getElementById('cancelEditBtn');
-  const panelEl = document.querySelector('.panel');
+  const panelEl = document.querySelector('.task-modal-box');
   const titleInput = document.getElementById('title');
   const sourceInput = document.getElementById('source');
+  const taskModalOverlay = document.getElementById('taskModalOverlay');
+
+  function openTaskModal(){
+    taskModalOverlay.style.display = 'flex';
+  }
+  function closeTaskModal(){
+    taskModalOverlay.style.display = 'none';
+    resetFormToAddMode();
+  }
 
   function resetFormToAddMode(){
     editingId = null;
@@ -1286,6 +1549,16 @@
     cancelEditBtn.style.display = 'none';
     panelEl.classList.remove('editing');
   }
+
+  document.getElementById('openAddTaskBtn').addEventListener('click', () => {
+    resetFormToAddMode();
+    openTaskModal();
+    titleInput.focus();
+  });
+  document.getElementById('taskModalClose').addEventListener('click', closeTaskModal);
+  taskModalOverlay.addEventListener('click', (e) => {
+    if(e.target.id === 'taskModalOverlay') closeTaskModal();
+  });
 
   function startEdit(id){
     const t = tasks.find(x => x.id === id);
@@ -1314,11 +1587,11 @@
     submitBtn.textContent = '儲存修改';
     cancelEditBtn.style.display = 'block';
     panelEl.classList.add('editing');
-    panelEl.scrollIntoView({ behavior:'smooth', block:'start' });
+    openTaskModal();
     titleInput.focus();
   }
 
-  cancelEditBtn.addEventListener('click', resetFormToAddMode);
+  cancelEditBtn.addEventListener('click', closeTaskModal);
 
   // ---- form submit ----
   document.getElementById('taskForm').addEventListener('submit', async (e) => {
@@ -1343,7 +1616,7 @@
       const prev = { title:t.title, source:t.source, category:t.category, received:t.received, deadline:t.deadline, urgency:t.urgency };
       t.title = title; t.source = source; t.category = category; t.received = received; t.deadline = deadline; t.urgency = urgency;
       saveLocalBackup();
-      resetFormToAddMode();
+      closeTaskModal();
       renderAll();
 
       const { error, missingCols } = await resilientWrite('update', { title, source, category, received, deadline, urgency }, id);
@@ -1364,7 +1637,7 @@
       };
       tasks.push(newTask);
       saveLocalBackup();
-      resetFormToAddMode();
+      closeTaskModal();
       renderAll();
 
       const { error, missingCols } = await resilientWrite('insert', {
@@ -1464,7 +1737,7 @@
     if(!confirm('確定要刪除這筆工作紀錄嗎？')) return;
     const removed = tasks.find(x => x.id === id);
     tasks = tasks.filter(x => x.id !== id);
-    if(editingId === id) resetFormToAddMode();
+    if(editingId === id) closeTaskModal();
     saveLocalBackup();
     renderAll();
     const { error } = await sb.from(TABLE).delete().eq('id', id);
@@ -1542,7 +1815,11 @@
     if(e.target.id === 'modalOverlay') closeDayModal();
   });
   document.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape') closeDayModal();
+    if(e.key === 'Escape'){
+      closeDayModal();
+      closeCompleteModal();
+      if(taskModalOverlay.style.display === 'flex') closeTaskModal();
+    }
   });
 
   // refresh periodically so overdue badges / calendar stay live
