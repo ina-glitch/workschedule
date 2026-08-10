@@ -922,7 +922,7 @@
     <div class="summary-section">
       <div class="summary-col">
         <div class="summary-head">
-          <h2>本週代辦工作</h2>
+          <h2>本週待辦工作</h2>
           <span class="summary-range" id="thisWeekRange"></span>
         </div>
         <div class="summary-list" id="thisWeekList"></div>
@@ -1442,8 +1442,8 @@
   }
   function fmtMD(d){ return `${d.getMonth()+1}/${d.getDate()}`; }
 
-  function summaryItemHtml(t){
-    const relStr = t.deadline || t.received;
+  function summaryItemHtml(t, dateStr){
+    const shownDate = dateStr || t.deadline || t.received;
     const isSimple = isSimpleCategory(t.category);
     const catHtml = t.category ? `<span class="category">${escapeHtml(t.category)}</span>` : '';
     const urgencyHtml = isSimple ? '' : `<span class="tag u-${t.urgency}">${urgencyLabel[t.urgency]}</span>`;
@@ -1452,7 +1452,7 @@
       <div class="summary-item">
         <span class="dot dot-${dotUrgency}"></span>
         <span class="si-title">${escapeHtml(t.title)}</span>
-        <span class="si-meta">${catHtml}${urgencyHtml}<span class="si-date">${fmtDate(relStr)}</span></span>
+        <span class="si-meta">${catHtml}${urgencyHtml}<span class="si-date">${fmtDate(shownDate)}</span></span>
         <span class="si-actions">
           <button class="done-btn" data-id="${t.id}">完成</button>
           <button class="edit-btn" data-id="${t.id}">編輯</button>
@@ -1467,31 +1467,43 @@
     document.getElementById('thisWeekRange').textContent = `${fmtMD(todayMonday)} - ${fmtMD(weekEnd)}`;
 
     const pending = tasks.filter(t => !t.done);
-    const thisWeekList = [];
+    const thisWeekEntries = []; // { t, dateStr }
     const overdueMap = {};
 
     pending.forEach(t => {
-      const relStr = t.deadline || t.received;
-      if(!relStr) return;
-      const relDate = parseDateLocal(relStr);
-      const mon = getMonday(relDate);
-      if(mon.getTime() === todayMonday.getTime()){
-        thisWeekList.push(t);
-      }else if(mon.getTime() < todayMonday.getTime()){
-        const y = mon.getFullYear(), m = mon.getMonth() + 1;
-        const key = y + '-' + m;
-        if(!overdueMap[key]) overdueMap[key] = { year:y, month:m, weeks:new Set(), tasks:[], sortTime:new Date(y, m-1, 1).getTime() };
-        overdueMap[key].weeks.add(weekNumberOfMonth(mon));
-        overdueMap[key].tasks.push(t);
+      const recMon = getMonday(parseDateLocal(t.received));
+      const dlMon = t.deadline ? getMonday(parseDateLocal(t.deadline)) : null;
+      const recIsThisWeek = recMon.getTime() === todayMonday.getTime();
+      const dlIsThisWeek = dlMon && dlMon.getTime() === todayMonday.getTime();
+
+      if(recIsThisWeek || dlIsThisWeek){
+        // 只要收到日期或截止日期落在本週，就算是本週待辦工作
+        // 優先顯示截止日期（若也在本週），否則顯示收到日期
+        thisWeekEntries.push({ t, dateStr: dlIsThisWeek ? t.deadline : t.received });
+        return;
       }
+
+      // 不在本週範圍內：判斷是否為過期未完成，並決定要歸類到哪一週
+      let bucketMon = null, bucketDateStr = null;
+      if(dlMon && dlMon.getTime() < todayMonday.getTime()){
+        bucketMon = dlMon; bucketDateStr = t.deadline;
+      }else if(recMon.getTime() < todayMonday.getTime()){
+        bucketMon = recMon; bucketDateStr = t.received;
+      }
+      if(!bucketMon) return; // 未來的工作，暫不顯示在總結欄位
+
+      const y = bucketMon.getFullYear(), m = bucketMon.getMonth() + 1;
+      const key = y + '-' + m;
+      if(!overdueMap[key]) overdueMap[key] = { year:y, month:m, weeks:new Set(), entries:[], sortTime:new Date(y, m-1, 1).getTime() };
+      overdueMap[key].weeks.add(weekNumberOfMonth(bucketMon));
+      overdueMap[key].entries.push({ t, dateStr:bucketDateStr });
     });
 
-    thisWeekList.sort((a,b) => {
-      const da = a.deadline || a.received, db = b.deadline || b.received;
-      return da === db ? urgencyRank[a.urgency] - urgencyRank[b.urgency] : (da < db ? -1 : 1);
+    thisWeekEntries.sort((a,b) => {
+      return a.dateStr === b.dateStr ? urgencyRank[a.t.urgency] - urgencyRank[b.t.urgency] : (a.dateStr < b.dateStr ? -1 : 1);
     });
-    document.getElementById('thisWeekList').innerHTML = thisWeekList.length
-      ? thisWeekList.map(summaryItemHtml).join('')
+    document.getElementById('thisWeekList').innerHTML = thisWeekEntries.length
+      ? thisWeekEntries.map(e => summaryItemHtml(e.t, e.dateStr)).join('')
       : `<div class="summary-empty">本週沒有待辦工作 🎉</div>`;
 
     const groups = Object.values(overdueMap).sort((a,b) => b.sortTime - a.sortTime);
@@ -1500,14 +1512,13 @@
       const weekLabel = weeksArr.length > 1
         ? `第${weeksArr[0]}~${weeksArr[weeksArr.length-1]}週`
         : `第${weeksArr[0]}週`;
-      const tasksSorted = g.tasks.sort((a,b) => {
-        const da = a.deadline || a.received, db = b.deadline || b.received;
-        return da === db ? urgencyRank[a.urgency] - urgencyRank[b.urgency] : (da < db ? -1 : 1);
+      const entriesSorted = g.entries.sort((a,b) => {
+        return a.dateStr === b.dateStr ? urgencyRank[a.t.urgency] - urgencyRank[b.t.urgency] : (a.dateStr < b.dateStr ? -1 : 1);
       });
       return `
         <div class="overdue-group">
-          <div class="og-head">${g.month}月 ${weekLabel}<span class="og-count">${tasksSorted.length}</span></div>
-          <div class="og-list">${tasksSorted.map(summaryItemHtml).join('')}</div>
+          <div class="og-head">${g.month}月 ${weekLabel}<span class="og-count">${entriesSorted.length}</span></div>
+          <div class="og-list">${entriesSorted.map(e => summaryItemHtml(e.t, e.dateStr)).join('')}</div>
         </div>`;
     }).join('');
     document.getElementById('overdueGroups').innerHTML = groups.length
