@@ -94,16 +94,26 @@
 
   .layout{
     display:grid;
-    grid-template-columns:320px 1fr;
+    grid-template-columns:320px 1fr 300px;
     gap:0;
     align-items:start;
-    max-width:1320px;
+    max-width:1620px;
     margin:0 auto;
   }
 
   /* ---- work summary sidebar ---- */
   .summary-sidebar{
     border-right:1px solid var(--line);
+    padding:28px 20px;
+    position:sticky;
+    top:73px;
+    height:calc(100vh - 73px);
+    overflow-y:auto;
+  }
+
+  /* ---- right sidebar (this week meetings / trips) ---- */
+  .summary-sidebar-right{
+    border-left:1px solid var(--line);
     padding:28px 20px;
     position:sticky;
     top:73px;
@@ -379,7 +389,10 @@
     border:1px solid var(--line);
     border-radius:8px;
     padding:9px 10px;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
   }
+  .summary-item:hover{ border-color:var(--teal); background:var(--low-bg); }
   .summary-item .dot{
     flex-shrink:0;
     width:8px; height:8px;
@@ -806,6 +819,13 @@
       border-right:none;
       border-bottom:1px solid var(--line);
     }
+    .summary-sidebar-right{
+      position:static;
+      height:auto;
+      border-left:none;
+      border-top:1px solid var(--line);
+      order:3;
+    }
     .summary-item{ flex-wrap:wrap; }
     .card{
       grid-template-columns:5px 1fr;
@@ -988,6 +1008,26 @@
       </div>
     </div>
   </div>
+
+  <!-- RIGHT SIDEBAR -->
+  <div class="summary-sidebar-right">
+    <div class="summary-section">
+      <div class="summary-col">
+        <div class="summary-head">
+          <h2>本週會議事項</h2>
+          <span class="summary-range" id="thisWeekMeetingRange"></span>
+        </div>
+        <div class="summary-list" id="thisWeekMeetingList"></div>
+      </div>
+      <div class="summary-col">
+        <div class="summary-head">
+          <h2>本週出差</h2>
+          <span class="summary-range" id="thisWeekTripRange"></span>
+        </div>
+        <div class="summary-list" id="thisWeekTripList"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- day detail modal -->
@@ -998,6 +1038,17 @@
       <button class="modal-close" id="modalClose">✕</button>
     </div>
     <div class="cards" id="modalCards"></div>
+  </div>
+</div>
+
+<!-- work item detail modal (opened by clicking an item in the sidebar summary lists) -->
+<div class="modal-overlay" id="itemDetailModalOverlay" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="itemDetailTitle">工作項目詳情</h3>
+      <button class="modal-close" id="itemDetailModalClose">✕</button>
+    </div>
+    <div class="cards" id="itemDetailCards"></div>
   </div>
 </div>
 
@@ -1401,6 +1452,18 @@
     modalDateKey = null;
     document.getElementById('modalOverlay').style.display = 'none';
   }
+
+  // ---- work item detail modal (sidebar summary lists) ----
+  function openItemDetailModal(id){
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    document.getElementById('itemDetailTitle').textContent = t.title;
+    document.getElementById('itemDetailCards').innerHTML = cardHtml(t);
+    document.getElementById('itemDetailModalOverlay').style.display = 'flex';
+  }
+  function closeItemDetailModal(){
+    document.getElementById('itemDetailModalOverlay').style.display = 'none';
+  }
   function renderModal(){
     if(!modalDateKey) return;
     let list;
@@ -1442,19 +1505,22 @@
   }
   function fmtMD(d){ return `${d.getMonth()+1}/${d.getDate()}`; }
 
-  function summaryItemHtml(t, dateStr){
+  function summaryItemHtml(t, dateStr, showDoneBtn){
+    // 僅工作類別為「法務」的工作項目保留「標記完成」按鈕
+    if(showDoneBtn === undefined) showDoneBtn = (t.category === '法務');
     const shownDate = dateStr || t.deadline || t.received;
     const isSimple = isSimpleCategory(t.category);
     const catHtml = t.category ? `<span class="category">${escapeHtml(t.category)}</span>` : '';
     const urgencyHtml = isSimple ? '' : `<span class="tag u-${t.urgency}">${urgencyLabel[t.urgency]}</span>`;
     const dotUrgency = isSimple ? 'normal' : t.urgency;
+    const doneBtnHtml = showDoneBtn ? `<button class="done-btn" data-id="${t.id}">完成</button>` : '';
     return `
-      <div class="summary-item">
+      <div class="summary-item" data-id="${t.id}">
         <span class="dot dot-${dotUrgency}"></span>
         <span class="si-title">${escapeHtml(t.title)}</span>
         <span class="si-meta">${catHtml}${urgencyHtml}<span class="si-date">${fmtDate(shownDate)}</span></span>
         <span class="si-actions">
-          <button class="done-btn" data-id="${t.id}">完成</button>
+          ${doneBtnHtml}
           <button class="edit-btn" data-id="${t.id}">編輯</button>
         </span>
       </div>`;
@@ -1464,22 +1530,42 @@
     const todayMonday = getMonday(new Date());
     const weekEnd = new Date(todayMonday);
     weekEnd.setDate(todayMonday.getDate() + 6);
-    document.getElementById('thisWeekRange').textContent = `${fmtMD(todayMonday)} - ${fmtMD(weekEnd)}`;
+    const weekRangeStr = `${fmtMD(todayMonday)} - ${fmtMD(weekEnd)}`;
+    document.getElementById('thisWeekRange').textContent = weekRangeStr;
+    document.getElementById('thisWeekMeetingRange').textContent = weekRangeStr;
+    document.getElementById('thisWeekTripRange').textContent = weekRangeStr;
 
     const pending = tasks.filter(t => !t.done);
-    const thisWeekEntries = []; // { t, dateStr }
-    const overdueMap = {};
+    const thisWeekEntries = []; // 法務：本週待辦工作
+    const meetingEntries = [];  // 會議：本週會議事項
+    const tripEntries = [];     // 公差：本週出差
+    const overdueMap = {};      // 法務：未完成的工作項目（過去週數）
 
     pending.forEach(t => {
       const recMon = getMonday(parseDateLocal(t.received));
       const dlMon = t.deadline ? getMonday(parseDateLocal(t.deadline)) : null;
       const recIsThisWeek = recMon.getTime() === todayMonday.getTime();
       const dlIsThisWeek = dlMon && dlMon.getTime() === todayMonday.getTime();
+      const isThisWeek = recIsThisWeek || dlIsThisWeek;
+      const thisWeekDateStr = dlIsThisWeek ? t.deadline : t.received;
 
-      if(recIsThisWeek || dlIsThisWeek){
+      // 本週會議事項：僅顯示類別為「會議」且落在本週的工作
+      if(t.category === '會議'){
+        if(isThisWeek) meetingEntries.push({ t, dateStr: thisWeekDateStr });
+        return;
+      }
+      // 本週出差：僅顯示類別為「公差」且落在本週的工作
+      if(t.category === '公差'){
+        if(isThisWeek) tripEntries.push({ t, dateStr: thisWeekDateStr });
+        return;
+      }
+      // 本週待辦工作 / 未完成的工作項目：僅顯示類別為「法務」的工作
+      if(t.category !== '法務') return;
+
+      if(isThisWeek){
         // 只要收到日期或截止日期落在本週，就算是本週待辦工作
         // 優先顯示截止日期（若也在本週），否則顯示收到日期
-        thisWeekEntries.push({ t, dateStr: dlIsThisWeek ? t.deadline : t.received });
+        thisWeekEntries.push({ t, dateStr: thisWeekDateStr });
         return;
       }
 
@@ -1499,12 +1585,24 @@
       overdueMap[key].entries.push({ t, dateStr:bucketDateStr });
     });
 
-    thisWeekEntries.sort((a,b) => {
+    const byDateThenUrgency = (a,b) => {
       return a.dateStr === b.dateStr ? urgencyRank[a.t.urgency] - urgencyRank[b.t.urgency] : (a.dateStr < b.dateStr ? -1 : 1);
-    });
+    };
+
+    thisWeekEntries.sort(byDateThenUrgency);
     document.getElementById('thisWeekList').innerHTML = thisWeekEntries.length
-      ? thisWeekEntries.map(e => summaryItemHtml(e.t, e.dateStr)).join('')
+      ? thisWeekEntries.map(e => summaryItemHtml(e.t, e.dateStr, true)).join('')
       : `<div class="summary-empty">本週沒有待辦工作 🎉</div>`;
+
+    meetingEntries.sort(byDateThenUrgency);
+    document.getElementById('thisWeekMeetingList').innerHTML = meetingEntries.length
+      ? meetingEntries.map(e => summaryItemHtml(e.t, e.dateStr, false)).join('')
+      : `<div class="summary-empty">本週沒有會議事項 🎉</div>`;
+
+    tripEntries.sort(byDateThenUrgency);
+    document.getElementById('thisWeekTripList').innerHTML = tripEntries.length
+      ? tripEntries.map(e => summaryItemHtml(e.t, e.dateStr, false)).join('')
+      : `<div class="summary-empty">本週沒有出差行程 🎉</div>`;
 
     const groups = Object.values(overdueMap).sort((a,b) => b.sortTime - a.sortTime);
     const groupsHtml = groups.map(g => {
@@ -1512,13 +1610,11 @@
       const weekLabel = weeksArr.length > 1
         ? `第${weeksArr[0]}~${weeksArr[weeksArr.length-1]}週`
         : `第${weeksArr[0]}週`;
-      const entriesSorted = g.entries.sort((a,b) => {
-        return a.dateStr === b.dateStr ? urgencyRank[a.t.urgency] - urgencyRank[b.t.urgency] : (a.dateStr < b.dateStr ? -1 : 1);
-      });
+      const entriesSorted = g.entries.sort(byDateThenUrgency);
       return `
         <div class="overdue-group">
           <div class="og-head">${g.month}月 ${weekLabel}<span class="og-count">${entriesSorted.length}</span></div>
-          <div class="og-list">${entriesSorted.map(e => summaryItemHtml(e.t, e.dateStr)).join('')}</div>
+          <div class="og-list">${entriesSorted.map(e => summaryItemHtml(e.t, e.dateStr, true)).join('')}</div>
         </div>`;
     }).join('');
     document.getElementById('overdueGroups').innerHTML = groups.length
@@ -1825,10 +1921,27 @@
   document.getElementById('modalOverlay').addEventListener('click', (e) => {
     if(e.target.id === 'modalOverlay') closeDayModal();
   });
+  document.getElementById('itemDetailModalClose').addEventListener('click', closeItemDetailModal);
+  document.getElementById('itemDetailModalOverlay').addEventListener('click', (e) => {
+    if(e.target.id === 'itemDetailModalOverlay') closeItemDetailModal();
+  });
+
+  // ---- sidebar summary item clicks (open work item detail) ----
+  ['thisWeekList', 'overdueGroups', 'thisWeekMeetingList', 'thisWeekTripList'].forEach(containerId => {
+    const container = document.getElementById(containerId);
+    if(!container) return;
+    container.addEventListener('click', (e) => {
+      if(e.target.closest('.si-actions')) return; // 完成/編輯按鈕交由既有的委派事件處理
+      const item = e.target.closest('.summary-item');
+      if(item && item.dataset.id) openItemDetailModal(item.dataset.id);
+    });
+  });
+
   document.addEventListener('keydown', (e) => {
     if(e.key === 'Escape'){
       closeDayModal();
       closeCompleteModal();
+      closeItemDetailModal();
       if(taskModalOverlay.style.display === 'flex') closeTaskModal();
     }
   });
