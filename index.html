@@ -877,6 +877,11 @@
       </div>
 
       <div class="field">
+        <label for="progress">進度說明</label>
+        <textarea id="progress" placeholder="例：已完成初稿，待主管確認"></textarea>
+      </div>
+
+      <div class="field">
         <label for="category">工作類別</label>
         <select id="category">
           <option value="">不指定</option>
@@ -1145,6 +1150,7 @@
       tasks.forEach(t => {
         if(t.source === undefined || t.source === null) t.source = '';
         if(t.category === undefined || t.category === null) t.category = '';
+        if(t.progress === undefined || t.progress === null) t.progress = '';
         t.completedAt = t.completed_at || null;
         t.completeNote = t.complete_note || '';
         // migrate old urgency values (high/mid/low) to new scheme
@@ -1299,6 +1305,9 @@
     const completeNoteHtml = t.done && t.completeNote
       ? `<span class="complete-note">說明：${escapeHtml(t.completeNote)}</span>`
       : '';
+    const progressHtml = t.progress
+      ? `<span class="complete-note">進度：${escapeHtml(t.progress)}</span>`
+      : '';
     return `
       <div class="card u-${t.urgency}${t.done ? ' done' : ''}">
         <div class="stripe"></div>
@@ -1312,6 +1321,7 @@
             <span>結案：${fmtDate(t.deadline)}</span>
             ${badgeHtml}
             ${completeInfoHtml}
+            ${progressHtml}
             ${completeNoteHtml}
           </div>
         </div>
@@ -1630,6 +1640,7 @@
   const panelEl = document.querySelector('.task-modal-box');
   const titleInput = document.getElementById('title');
   const sourceInput = document.getElementById('source');
+  const progressInput = document.getElementById('progress');
   const taskModalOverlay = document.getElementById('taskModalOverlay');
 
   function openTaskModal(){
@@ -1674,6 +1685,7 @@
     closeDayModal();
     titleInput.value = t.title;
     sourceInput.value = t.source || '';
+    progressInput.value = t.progress || '';
     categoryInput.value = t.category || '';
     receivedInput.value = t.received;
     if(t.deadline){
@@ -1705,6 +1717,7 @@
     e.preventDefault();
     const title = document.getElementById('title').value.trim();
     const source = document.getElementById('source').value.trim();
+    const progress = progressInput.value.trim();
     const category = categoryInput.value;
     const isSimple = isSimpleCategory(category);
     const received = receivedInput.value;
@@ -1720,13 +1733,13 @@
       const id = editingId;
       const t = tasks.find(x => x.id === id);
       if(!t) return;
-      const prev = { title:t.title, source:t.source, category:t.category, received:t.received, deadline:t.deadline, urgency:t.urgency };
-      t.title = title; t.source = source; t.category = category; t.received = received; t.deadline = deadline; t.urgency = urgency;
+      const prev = { title:t.title, source:t.source, progress:t.progress, category:t.category, received:t.received, deadline:t.deadline, urgency:t.urgency };
+      t.title = title; t.source = source; t.progress = progress; t.category = category; t.received = received; t.deadline = deadline; t.urgency = urgency;
       saveLocalBackup();
       closeTaskModal();
       renderAll();
 
-      const { error, missingCols } = await resilientWrite('update', { title, source, category, received, deadline, urgency }, id);
+      const { error, missingCols } = await resilientWrite('update', { title, source, progress, category, received, deadline, urgency }, id);
       warnMissingColumns(missingCols);
       if(error){
         console.error('更新到 Supabase 失敗：', error);
@@ -1739,7 +1752,7 @@
       // ---- add new task ----
       const newTask = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-        title, source, category, received, deadline, urgency, done:false,
+        title, source, progress, category, received, deadline, urgency, done:false,
         completedAt:null, completeNote:''
       };
       tasks.push(newTask);
@@ -1748,7 +1761,7 @@
       renderAll();
 
       const { error, missingCols } = await resilientWrite('insert', {
-        id:newTask.id, title, source, category, received, deadline, urgency, done:false,
+        id:newTask.id, title, source, progress, category, received, deadline, urgency, done:false,
         completed_at:null, complete_note:''
       });
       warnMissingColumns(missingCols);
