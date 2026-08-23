@@ -616,28 +616,19 @@
 
 
   .unscheduled-bar{
-    display:none;
-    align-items:center;
-    gap:10px;
-    flex-wrap:wrap;
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:16px 18px;
-    margin-bottom:14px;
-  }
-  .unscheduled-bar .label{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:13px;
-    font-weight:600;
-    color:var(--muted);
-    margin-right:4px;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:8px;
+    width:100%;
   }
   .unscheduled-bar .chip{
     cursor:pointer;
     font-size:13px;
     padding:6px 12px;
     border-radius:7px;
+    width:100%;
+    box-sizing:border-box;
   }
 
   .cal-nav{
@@ -895,7 +886,7 @@
           <span class="legend-item"><span class="swatch cat-meeting"></span>會議</span>
           <span class="legend-item"><span class="swatch cat-trip"></span>公差</span>
           <span class="legend-item"><span class="swatch cat-legal"></span>法務</span>
-          <span class="legend-item"><span class="swatch cat-none"></span>未分類</span>
+          <span class="legend-item"><span class="swatch cat-none"></span>其他</span>
         </div>
       </div>
 
@@ -959,6 +950,12 @@
         </div>
         <div class="summary-groups" id="overdueGroups"></div>
       </div>
+      <div class="summary-col">
+        <div class="summary-head">
+          <h2>不限期限工作</h2>
+        </div>
+        <div class="unscheduled-bar" id="unscheduledBar"></div>
+      </div>
     </div>
   </div>
 
@@ -990,14 +987,13 @@
           <option value="會議">會議</option>
           <option value="公差">公差</option>
           <option value="法務">法務</option>
-          <option value="none">未分類</option>
+          <option value="none">其他</option>
         </select>
       </div>
     </div>
 
     <!-- calendar view -->
     <div id="calendarWrap">
-      <div class="unscheduled-bar" id="unscheduledBar"></div>
       <div class="cal-nav">
         <button class="nav-btn" id="calPrev">←</button>
         <div class="label" id="calLabel"></div>
@@ -1444,13 +1440,10 @@
     const bar = document.getElementById('unscheduledBar');
     const list = filteredTasks().filter(t => !t.deadline && !isSimpleCategory(t.category));
     if(list.length === 0){
-      bar.style.display = 'none';
-      bar.innerHTML = '';
+      bar.innerHTML = `<div class="summary-empty">目前沒有不限期限的工作</div>`;
       return;
     }
-    bar.style.display = 'flex';
-    bar.innerHTML = `<span class="label">不限期限：</span>` +
-      list.sort(compareByUrgency).map(t => `<span class="chip ${categoryClass(t)}${t.done?' done':''}" data-key="unlimited">${urgencyDotHtml(t)}<span class="label-text">${escapeHtml(t.title)}</span></span>`).join('');
+    bar.innerHTML = list.sort(compareByUrgency).map(t => `<span class="chip ${categoryClass(t)}${t.done?' done':''}" data-key="unlimited">${urgencyDotHtml(t)}<span class="label-text">${escapeHtml(t.title)}</span></span>`).join('');
   }
 
   function openDayModal(key){
