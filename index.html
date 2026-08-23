@@ -1438,7 +1438,7 @@
   // (請假/會議/公差) never use a deadline and already show up on their own date
   function renderUnscheduled(){
     const bar = document.getElementById('unscheduledBar');
-    const list = filteredTasks().filter(t => !t.deadline && !isSimpleCategory(t.category));
+    const list = filteredTasks().filter(t => !t.done && !t.deadline && !isSimpleCategory(t.category));
     if(list.length === 0){
       bar.innerHTML = `<div class="summary-empty">目前沒有不限期限的工作</div>`;
       return;
