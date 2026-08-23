@@ -1569,8 +1569,8 @@
         if(isThisWeek) tripEntries.push({ t, dateStr: thisWeekDateStr });
         return;
       }
-      // 本週待辦工作 / 未完成的工作項目：僅顯示類別為「法務」的工作
-      if(t.category !== '法務') return;
+      // 本週待辦工作 / 未完成的工作項目：顯示類別為「法務」或「其他」（未指定類別）的工作
+      if(t.category !== '法務' && t.category !== '') return;
 
       if(isThisWeek){
         // 只要收到日期或截止日期落在本週，就算是本週待辦工作
