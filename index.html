@@ -293,6 +293,8 @@
     transition:background .15s ease;
   }
   .add-task-btn:hover{ background:var(--teal-deep); }
+  .add-task-btn.loan-btn{ background:#1B6E8C; }
+  .add-task-btn.loan-btn:hover{ background:#144F65; }
 
   .seg{
     display:flex;
@@ -398,6 +400,10 @@
     width:8px; height:8px;
     border-radius:50%;
   }
+  .summary-item .dot.dot-top{ background:var(--red); }
+  .summary-item .dot.dot-high{ background:var(--amber); }
+  .summary-item .dot.dot-normal{ background:var(--teal); }
+  .summary-item .dot.dot-note{ background:var(--muted); }
   .summary-item .si-title{
     flex:1 1 100%;
     min-width:0;
@@ -741,6 +747,7 @@
   .chip.cat-trip{ background:var(--amber-bg); color:#8a6415; }
   .chip.cat-legal{ background:#FDEDF3; color:#B0397A; }
   .chip.cat-none{ background:var(--low-bg); color:var(--teal-deep); }
+  .chip.cat-loan{ background:#DCEEF5; color:#1B6E8C; }
   .chip.done{ text-decoration:line-through; opacity:0.55; }
   .chip.chip-deadline{ font-weight:700; box-shadow:0 0 0 1px var(--red) inset; }
   .chip.chip-completed{ font-weight:700; box-shadow:0 0 0 1px var(--teal) inset; }
@@ -801,6 +808,17 @@
   }
   .complete-modal-actions .cancel-edit-btn{ margin-top:0; }
   .complete-modal-actions button{ flex:1; }
+
+  /* ---- contract loan feature ---- */
+  .loan-card.status-overdue .stripe{ background:var(--red); }
+  .loan-card.status-soon .stripe{ background:var(--amber); }
+  .loan-card.status-borrowed .stripe{ background:var(--teal); }
+  .loan-card.status-unlimited .stripe{ background:var(--note-line); }
+  .loan-card.status-returned{ opacity:0.6; }
+  .loan-card.status-returned .stripe{ background:var(--note-line); }
+  .loan-card.status-returned .title{ text-decoration:line-through; color:var(--muted); }
+
+  .badge.returned{ background:var(--low-bg); color:var(--teal-deep); }
 
   @media (max-width:880px){
     .layout{ grid-template-columns:1fr; }
@@ -932,7 +950,7 @@
   </div>
 </div>
 
-<div class="layout">
+<div class="layout" id="scheduleView">
   <!-- SUMMARY SIDEBAR -->
   <div class="summary-sidebar">
     <div class="summary-section">
@@ -965,6 +983,7 @@
       <h1>所有工作</h1>
       <div class="controls">
         <button type="button" class="add-task-btn" id="openAddTaskBtn">＋ 新增工作</button>
+        <button type="button" class="add-task-btn loan-btn" id="openAddLoanBtn">＋ 新增合約</button>
         <input type="search" id="searchInput" class="search-input" placeholder="🔍 搜尋工作名稱或來源">
         <div class="seg" id="filterSeg">
           <button data-filter="active">進行中</button>
@@ -987,6 +1006,7 @@
           <option value="會議">會議</option>
           <option value="公差">公差</option>
           <option value="法務">法務</option>
+          <option value="合約借閱">合約借閱</option>
           <option value="none">其他</option>
         </select>
       </div>
@@ -1027,7 +1047,97 @@
         </div>
         <div class="summary-list" id="thisWeekTripList"></div>
       </div>
+      <div class="summary-col">
+        <div class="summary-head">
+          <h2>合約借閱</h2>
+          <span class="summary-range" id="loanSidebarRange"></span>
+        </div>
+        <div class="summary-list" id="loanSidebarList"></div>
+      </div>
     </div>
+  </div>
+</div>
+
+<!-- add / edit contract loan modal -->
+<div class="modal-overlay" id="loanModalOverlay" style="display:none;">
+  <div class="modal-box task-modal-box panel">
+    <div class="modal-head">
+      <div>
+        <h2 id="loanFormTitle" style="margin:0 0 4px;">新增借閱紀錄</h2>
+        <p class="hint" style="margin:0;">填寫合約正本借出資訊，歸還後可標記為已歸還</p>
+      </div>
+      <button type="button" class="modal-close" id="loanModalClose">✕</button>
+    </div>
+
+    <form id="loanForm">
+      <div class="field">
+        <label for="loanContractName">合約名稱／編號</label>
+        <input type="text" id="loanContractName" required placeholder="例：114年度辦公室租賃合約">
+      </div>
+
+      <div class="field">
+        <label for="loanBorrower">借閱人</label>
+        <input type="text" id="loanBorrower" required placeholder="例：王小明">
+      </div>
+
+      <div class="field">
+        <label for="loanDepartment">借閱單位／部門</label>
+        <input type="text" id="loanDepartment" placeholder="例：法務室">
+      </div>
+
+      <div class="field">
+        <label for="loanDate">借出日期</label>
+        <div class="row">
+          <input type="date" id="loanDate" required>
+          <button type="button" id="loanNowBtn">今天</button>
+        </div>
+      </div>
+
+      <div class="field" id="loanExpectedField">
+        <label for="loanExpectedReturn">預計歸還日期</label>
+        <div class="row">
+          <input type="date" id="loanExpectedReturn">
+          <label class="unlimited-toggle"><input type="checkbox" id="loanExpectedUnlimited"> 未定</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="loanPurpose">借閱事由</label>
+        <textarea id="loanPurpose" placeholder="例：提供會計師查核用"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="loanNote">備註</label>
+        <textarea id="loanNote" placeholder="補充說明..."></textarea>
+      </div>
+
+      <button type="submit" class="submit-btn" id="loanSubmitBtn">新增借閱紀錄</button>
+      <button type="button" class="cancel-edit-btn" id="loanCancelEditBtn" style="display:none;">取消編輯</button>
+    </form>
+  </div>
+</div>
+
+<!-- mark loan as returned modal -->
+<div class="modal-overlay" id="loanReturnModalOverlay" style="display:none;">
+  <div class="modal-box complete-modal-box">
+    <div class="modal-head">
+      <h3>標記歸還</h3>
+      <button class="modal-close" id="loanReturnModalClose">✕</button>
+    </div>
+    <form id="loanReturnForm">
+      <div class="field">
+        <label for="loanReturnDate">實際歸還日期</label>
+        <input type="date" id="loanReturnDate" required>
+      </div>
+      <div class="field">
+        <label for="loanReturnNote">說明欄（選填）</label>
+        <textarea id="loanReturnNote" placeholder="補充說明，例如經手人、狀況..."></textarea>
+      </div>
+      <div class="complete-modal-actions">
+        <button type="button" class="cancel-edit-btn" id="loanReturnCancelBtn">取消</button>
+        <button type="submit" class="submit-btn">確認歸還</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -1085,6 +1195,7 @@
   const SUPABASE_ANON_KEY = 'sb_publishable_-mDe3WCxiH3lJ_Awh9TBkQ_XNM34QFY';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const TABLE = 'tasks';
+  const LOAN_TABLE = 'contract_loans';
 
   // Some fields (category / completed_at / complete_note) are newer additions.
   // If the Supabase table hasn't had those columns added yet, PostgREST returns
@@ -1097,13 +1208,13 @@
       || /column "?([\w]+)"? .*does not exist/i.exec(error.message);
     return m ? m[1] : null;
   }
-  async function resilientWrite(kind, payload, id){
+  async function resilientWrite(table, kind, payload, id){
     let body = { ...payload };
     let missingCols = [];
     for(let attempt=0; attempt<6; attempt++){
       const query = kind === 'insert'
-        ? sb.from(TABLE).insert(body)
-        : sb.from(TABLE).update(body).eq('id', id);
+        ? sb.from(table).insert(body)
+        : sb.from(table).update(body).eq('id', id);
       const { error } = await query;
       if(!error) return { error:null, missingCols };
       const col = extractMissingColumn(error);
@@ -1124,6 +1235,7 @@
   }
 
   const STORAGE_KEY = 'worklog.tasks.v1';
+  const LOAN_STORAGE_KEY = 'worklog.loans.v1';
   const urgencyLabel = { top:'最急件', high:'急件', normal:'普通件', note:'備註' };
   const urgencyRank = { top:0, high:1, normal:2, note:3 };
   const weekdayNames = ['日','一','二','三','四','五','六'];
@@ -1137,6 +1249,10 @@
   let calRefDate = new Date();
   let modalDateKey = null;
   let editingId = null;
+
+  let loans = [];
+  let editingLoanId = null;
+  let pendingReturnLoanId = null;
 
   async function load(){
     try{
@@ -1168,6 +1284,30 @@
   }
   // 本機備份，主要資料以 Supabase 為主，localStorage 只作離線保險
   function saveLocalBackup(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+
+  async function loadLoans(){
+    try{
+      const { data, error } = await sb.from(LOAN_TABLE).select('*').order('loan_date', { ascending:false });
+      if(error) throw error;
+      loans = data || [];
+      loans.forEach(l => {
+        if(l.department === undefined || l.department === null) l.department = '';
+        if(l.purpose === undefined || l.purpose === null) l.purpose = '';
+        if(l.note === undefined || l.note === null) l.note = '';
+        l.expectedReturn = l.expected_return || null;
+        l.returnDate = l.return_date || null;
+        l.returnNote = l.return_note || '';
+      });
+    }catch(e){
+      console.error('讀取合約借閱資料失敗，改用本機備份：', e);
+      // 連不到 Supabase（例如資料表尚未建立）時，退回本機備份，避免資料完全無法顯示
+      try{
+        const raw = localStorage.getItem(LOAN_STORAGE_KEY);
+        loans = raw ? JSON.parse(raw) : [];
+      }catch(e2){ loans = []; }
+    }
+  }
+  function saveLoanLocalBackup(){ localStorage.setItem(LOAN_STORAGE_KEY, JSON.stringify(loans)); }
 
   function pad(n){ return String(n).padStart(2,'0'); }
   function toLocalDateValue(d){
@@ -1335,6 +1475,115 @@
     document.getElementById('statOverdue').textContent = tasks.filter(t=>!t.done && deadlineStatus(t.deadline,false).key==='overdue').length;
   }
 
+  // ==== 合約借閱（合約正本借出明細）====
+  function loanStatus(l){
+    if(l.returnDate) return { key:'returned', label:'已歸還' };
+    if(!l.expectedReturn) return { key:'unlimited', label:'借出中（未定歸還日）' };
+    const dl = parseDateLocal(l.expectedReturn);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const diffDays = Math.round((dl - today) / 86400000);
+    if(diffDays < 0) return { key:'overdue', label:'逾期未還' };
+    if(diffDays <= 3) return { key:'soon', label:'即將到期' };
+    return { key:'borrowed', label:'借出中' };
+  }
+
+  const loanStatusRank = { overdue:0, soon:1, borrowed:2, unlimited:3, returned:4 };
+  function compareLoans(a,b){
+    const ra = loanStatusRank[loanStatus(a).key], rb = loanStatusRank[loanStatus(b).key];
+    if(ra !== rb) return ra - rb;
+    return (b.loan_date || '').localeCompare(a.loan_date || '');
+  }
+  function loanDotClass(statusKey){
+    if(statusKey === 'overdue') return 'dot-top';
+    if(statusKey === 'soon') return 'dot-high';
+    if(statusKey === 'unlimited') return 'dot-note';
+    return 'dot-normal';
+  }
+
+  function loanCardHtml(l){
+    const status = loanStatus(l);
+    let badgeHtml = '';
+    if(status.key === 'overdue') badgeHtml = `<span class="badge overdue">⚠ ${status.label}</span>`;
+    else if(status.key === 'soon') badgeHtml = `<span class="badge soon">⏰ ${status.label}</span>`;
+    else if(status.key === 'unlimited') badgeHtml = `<span class="badge unlimited">${status.label}</span>`;
+    else if(status.key === 'returned') badgeHtml = `<span class="badge returned">✅ ${status.label}</span>`;
+    else badgeHtml = `<span class="badge ok">${status.label}</span>`;
+    const deptHtml = l.department ? `<span class="source">單位：${escapeHtml(l.department)}</span>` : '';
+    const purposeHtml = l.purpose ? `<span class="complete-note">事由：${escapeHtml(l.purpose)}</span>` : '';
+    const returnInfoHtml = l.returnDate
+      ? `<span class="badge ok">📥 歸還日：${fmtDate(l.returnDate)}</span>`
+      : '';
+    const returnNoteHtml = l.returnDate && l.returnNote
+      ? `<span class="complete-note">歸還說明：${escapeHtml(l.returnNote)}</span>`
+      : '';
+    const noteHtml = l.note ? `<span class="complete-note">備註：${escapeHtml(l.note)}</span>` : '';
+    return `
+      <div class="card loan-card status-${status.key}">
+        <div class="stripe"></div>
+        <div class="body">
+          <p class="title">${escapeHtml(l.contract_name)}</p>
+          <div class="meta">
+            <span class="source">借閱人：${escapeHtml(l.borrower)}</span>
+            ${deptHtml}
+            <span>借出：${fmtDate(l.loan_date)}</span>
+            <span>預計歸還：${fmtDate(l.expectedReturn)}</span>
+            ${badgeHtml}
+            ${returnInfoHtml}
+            ${purposeHtml}
+            ${returnNoteHtml}
+            ${noteHtml}
+          </div>
+        </div>
+        <div class="actions">
+          <button class="loan-return-btn" data-id="${l.id}">${l.returnDate ? '取消歸還' : '標記歸還'}</button>
+          <button class="loan-edit-btn" data-id="${l.id}">編輯</button>
+          <button class="loan-del-btn" data-id="${l.id}">刪除</button>
+        </div>
+      </div>`;
+  }
+
+  // 合約借閱不再有獨立分頁，新增／編輯／刪除／歸還後只需要刷新右側欄摘要，
+  // 以及中間區塊的日曆（借閱日期／預計歸還／實際歸還都會顯示在日曆上）
+  function renderContractAll(){
+    renderLoanSidebar();
+    renderMonth();
+    if(modalDateKey) renderModal();
+  }
+
+  // ---- 右側欄「合約借閱」摘要（借出中／逾期未還的合約，隨時可在工作排程畫面看到）----
+  function loanSummaryItemHtml(l){
+    const status = loanStatus(l);
+    const dotClass = loanDotClass(status.key);
+    const borrowerHtml = l.borrower ? `<span>${escapeHtml(l.borrower)}</span>` : '';
+    const statusClass = status.key === 'overdue' ? 'u-top' : (status.key === 'soon' ? 'u-high' : 'u-normal');
+    return `
+      <div class="summary-item" data-id="${l.id}">
+        <span class="dot ${dotClass}"></span>
+        <span class="si-title">${escapeHtml(l.contract_name)}</span>
+        <span class="si-meta">
+          ${borrowerHtml}
+          <span class="tag ${statusClass}">${status.label}</span>
+          <span class="si-date">借出：${fmtDate(l.loan_date)}</span>
+        </span>
+        <span class="si-actions">
+          <button class="loan-return-btn" data-id="${l.id}">${l.returnDate ? '取消歸還' : '歸還'}</button>
+          <button class="loan-edit-btn" data-id="${l.id}">編輯</button>
+        </span>
+      </div>`;
+  }
+
+  function renderLoanSidebar(){
+    const list = loans.filter(l => !l.returnDate).sort(compareLoans);
+    const rangeEl = document.getElementById('loanSidebarRange');
+    if(rangeEl) rangeEl.textContent = list.length ? `借出中 ${list.length} 筆` : '';
+    const container = document.getElementById('loanSidebarList');
+    if(!container) return;
+    container.innerHTML = list.length
+      ? list.map(loanSummaryItemHtml).join('')
+      : `<div class="summary-empty">目前沒有借出中的合約 🎉</div>`;
+  }
+
   function compareByDeadline(a,b){
     if(a.deadline === b.deadline) return urgencyRank[a.urgency] - urgencyRank[b.urgency];
     if(!a.deadline) return 1;
@@ -1381,7 +1630,7 @@
     return map;
   }
 
-  const categoryClassMap = { '請假':'cat-leave', '會議':'cat-meeting', '公差':'cat-trip', '法務':'cat-legal' };
+  const categoryClassMap = { '請假':'cat-leave', '會議':'cat-meeting', '公差':'cat-trip', '法務':'cat-legal', '合約借閱':'cat-loan' };
   function categoryClass(t){
     return categoryClassMap[t.category] || 'cat-none';
   }
@@ -1394,13 +1643,56 @@
     let prefix = '';
     if(entry.tag === 'deadline') prefix = '🔥deadline ';
     else if(entry.tag === 'completed') prefix = '✅已完成 ';
+    else if(entry.tag === 'loan-borrow') prefix = '📑借出 ';
+    else if(entry.tag === 'loan-returned') prefix = '📥已還 ';
+    else if(entry.tag === 'loan-expected') prefix = '⏳預計還 ';
     const label = `${prefix}${escapeHtml(t.title)}`;
     return `<span class="chip ${categoryClass(t)}${t.done?' done':''}${entry.tag==='deadline'?' chip-deadline':''}${entry.tag==='completed'?' chip-completed':''}" data-key="${cellKey}">${urgencyDotHtml(t)}<span class="label-text">${label}</span></span>`;
+  }
+
+  // ---- 合約借閱：併入中間區塊的日曆 ----
+  // 借閱項目共用「工作類別」篩選機制：選「合約借閱」只顯示借閱項目，
+  // 選其他類別則隱藏借閱項目，選「全部類別」則兩者同時顯示。
+  function loanCategoryAllowed(){
+    return categoryFilter === 'all' || categoryFilter === '合約借閱';
+  }
+  function matchesSearch(strList){
+    const q = searchQuery.trim().toLowerCase();
+    if(!q) return true;
+    return strList.some(s => (s || '').toLowerCase().includes(q));
+  }
+  function filteredLoansForCalendar(){
+    if(!loanCategoryAllowed()) return [];
+    let list = loans.slice();
+    if(filterMode === 'active') list = list.filter(l => !l.returnDate);
+    if(filterMode === 'done') list = list.filter(l => !!l.returnDate);
+    list = list.filter(l => matchesSearch([l.contract_name, l.borrower]));
+    return list;
+  }
+  function loanPseudoTask(l){
+    return { id:'loan-'+l.id, title:l.contract_name, category:'合約借閱', urgency:'normal', done:!!l.returnDate, __loan:l };
+  }
+  function addLoanEntriesToMap(map){
+    function push(key, entry){
+      if(!key) return;
+      (map[key] = map[key] || []).push(entry);
+    }
+    filteredLoansForCalendar().forEach(l => {
+      const pseudoTask = loanPseudoTask(l);
+      push(l.loan_date, { task:pseudoTask, tag:'loan-borrow' });
+      if(l.returnDate){
+        if(l.returnDate !== l.loan_date) push(l.returnDate, { task:pseudoTask, tag:'loan-returned' });
+      }else if(l.expectedReturn && l.expectedReturn !== l.loan_date){
+        push(l.expectedReturn, { task:pseudoTask, tag:'loan-expected' });
+      }
+    });
+    Object.values(map).forEach(arr => arr.sort((a,b) => compareByUrgency(a.task,b.task)));
   }
 
   function renderMonth(){
     const list = filteredTasks();
     const map = groupByDate(list);
+    addLoanEntriesToMap(map);
     const year = calRefDate.getFullYear();
     const month = calRefDate.getMonth();
     document.getElementById('calLabel').textContent = `${year} 年 ${month+1} 月`;
@@ -1469,7 +1761,7 @@
   }
   function renderModal(){
     if(!modalDateKey) return;
-    let list;
+    let list, loanList = [];
     if(modalDateKey === 'unlimited'){
       document.getElementById('modalTitle').textContent = '不限期限的工作';
       list = filteredTasks().filter(t => !t.deadline && !isSimpleCategory(t.category)).sort(compareByUrgency);
@@ -1478,11 +1770,12 @@
       const dObj = new Date(y, m-1, d);
       document.getElementById('modalTitle').textContent = `${y}年${m}月${d}日 星期${weekdayNames[dObj.getDay()]}`;
       list = filteredTasks().filter(t => t.received === modalDateKey || t.deadline === modalDateKey || t.completedAt === modalDateKey).sort(compareByUrgency);
+      loanList = filteredLoansForCalendar().filter(l => l.loan_date === modalDateKey || l.expectedReturn === modalDateKey || l.returnDate === modalDateKey).sort(compareLoans);
     }
     const modalCards = document.getElementById('modalCards');
-    modalCards.innerHTML = list.length === 0
+    modalCards.innerHTML = (list.length + loanList.length) === 0
       ? `<div class="modal-empty">這天沒有符合目前篩選條件的工作</div>`
-      : list.map(cardHtml).join('');
+      : list.map(cardHtml).join('') + loanList.map(loanCardHtml).join('');
   }
 
   function renderAll(){
@@ -1732,7 +2025,7 @@
       closeTaskModal();
       renderAll();
 
-      const { error, missingCols } = await resilientWrite('update', { title, source, progress, category, received, deadline, urgency }, id);
+      const { error, missingCols } = await resilientWrite(TABLE, 'update', { title, source, progress, category, received, deadline, urgency }, id);
       warnMissingColumns(missingCols);
       if(error){
         console.error('更新到 Supabase 失敗：', error);
@@ -1753,7 +2046,7 @@
       closeTaskModal();
       renderAll();
 
-      const { error, missingCols } = await resilientWrite('insert', {
+      const { error, missingCols } = await resilientWrite(TABLE, 'insert', {
         id:newTask.id, title, source, progress, category, received, deadline, urgency, done:false,
         completed_at:null, complete_note:''
       });
@@ -1801,7 +2094,7 @@
     t.completeNote = '';
     saveLocalBackup();
     renderAll();
-    const { error, missingCols } = await resilientWrite('update', { done:false, completed_at:null, complete_note:null }, id);
+    const { error, missingCols } = await resilientWrite(TABLE, 'update', { done:false, completed_at:null, complete_note:null }, id);
     warnMissingColumns(missingCols);
     if(error){
       console.error('更新 Supabase 失敗：', error);
@@ -1830,7 +2123,7 @@
     closeCompleteModal();
     renderAll();
 
-    const { error, missingCols } = await resilientWrite('update', { done:true, completed_at:completedAt, complete_note:completeNote }, id);
+    const { error, missingCols } = await resilientWrite(TABLE, 'update', { done:true, completed_at:completedAt, complete_note:completeNote }, id);
     warnMissingColumns(missingCols);
     if(error){
       console.error('更新 Supabase 失敗：', error);
@@ -1943,21 +2236,276 @@
     });
   });
 
+  // 合約借閱側欄項目點擊：直接開啟編輯視窗（歸還/編輯按鈕仍交由既有的委派事件處理）
+  (function(){
+    const container = document.getElementById('loanSidebarList');
+    if(!container) return;
+    container.addEventListener('click', (e) => {
+      if(e.target.closest('.si-actions')) return;
+      const item = e.target.closest('.summary-item');
+      if(item && item.dataset.id) startEditLoan(item.dataset.id);
+    });
+  })();
+
   document.addEventListener('keydown', (e) => {
     if(e.key === 'Escape'){
       closeDayModal();
       closeCompleteModal();
       closeItemDetailModal();
       if(taskModalOverlay.style.display === 'flex') closeTaskModal();
+      if(document.getElementById('loanModalOverlay').style.display === 'flex') closeLoanModal();
+      if(document.getElementById('loanReturnModalOverlay').style.display === 'flex') closeLoanReturnModal();
     }
   });
 
+  // ==== 合約借閱：新增／編輯表單 ====
+  const loanContractNameInput = document.getElementById('loanContractName');
+  const loanBorrowerInput = document.getElementById('loanBorrower');
+  const loanDepartmentInput = document.getElementById('loanDepartment');
+  const loanDateInput = document.getElementById('loanDate');
+  const loanExpectedReturnInput = document.getElementById('loanExpectedReturn');
+  const loanExpectedUnlimited = document.getElementById('loanExpectedUnlimited');
+  const loanPurposeInput = document.getElementById('loanPurpose');
+  const loanNoteInput = document.getElementById('loanNote');
+  const loanModalOverlay = document.getElementById('loanModalOverlay');
+  const loanFormTitleEl = document.getElementById('loanFormTitle');
+  const loanSubmitBtn = document.getElementById('loanSubmitBtn');
+  const loanCancelEditBtn = document.getElementById('loanCancelEditBtn');
+  const loanPanelEl = loanModalOverlay.querySelector('.panel');
+
+  loanDateInput.value = toLocalDateValue(new Date());
+  document.getElementById('loanNowBtn').addEventListener('click', () => {
+    loanDateInput.value = toLocalDateValue(new Date());
+  });
+  loanExpectedUnlimited.addEventListener('change', () => {
+    if(loanExpectedUnlimited.checked){
+      loanExpectedReturnInput.value = '';
+      loanExpectedReturnInput.disabled = true;
+    }else{
+      loanExpectedReturnInput.disabled = false;
+    }
+  });
+
+  function openLoanModal(){ loanModalOverlay.style.display = 'flex'; }
+  function closeLoanModal(){ loanModalOverlay.style.display = 'none'; resetLoanFormToAddMode(); }
+
+  function resetLoanFormToAddMode(){
+    editingLoanId = null;
+    document.getElementById('loanForm').reset();
+    loanDateInput.value = toLocalDateValue(new Date());
+    loanExpectedUnlimited.checked = false;
+    loanExpectedReturnInput.disabled = false;
+    loanFormTitleEl.textContent = '新增借閱紀錄';
+    loanSubmitBtn.textContent = '新增借閱紀錄';
+    loanCancelEditBtn.style.display = 'none';
+    loanPanelEl.classList.remove('editing');
+  }
+
+  document.getElementById('openAddLoanBtn').addEventListener('click', () => {
+    resetLoanFormToAddMode();
+    openLoanModal();
+    loanContractNameInput.focus();
+  });
+  document.getElementById('loanModalClose').addEventListener('click', closeLoanModal);
+  loanModalOverlay.addEventListener('click', (e) => {
+    if(e.target.id === 'loanModalOverlay') closeLoanModal();
+  });
+  loanCancelEditBtn.addEventListener('click', closeLoanModal);
+
+  function startEditLoan(id){
+    const l = loans.find(x => x.id === id);
+    if(!l) return;
+    editingLoanId = id;
+    loanContractNameInput.value = l.contract_name;
+    loanBorrowerInput.value = l.borrower;
+    loanDepartmentInput.value = l.department || '';
+    loanDateInput.value = l.loan_date;
+    if(l.expectedReturn){
+      loanExpectedUnlimited.checked = false;
+      loanExpectedReturnInput.disabled = false;
+      loanExpectedReturnInput.value = l.expectedReturn;
+    }else{
+      loanExpectedUnlimited.checked = true;
+      loanExpectedReturnInput.disabled = true;
+      loanExpectedReturnInput.value = '';
+    }
+    loanPurposeInput.value = l.purpose || '';
+    loanNoteInput.value = l.note || '';
+    loanFormTitleEl.textContent = '編輯借閱紀錄';
+    loanSubmitBtn.textContent = '儲存修改';
+    loanCancelEditBtn.style.display = 'block';
+    loanPanelEl.classList.add('editing');
+    openLoanModal();
+    loanContractNameInput.focus();
+  }
+
+  document.getElementById('loanForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const contract_name = loanContractNameInput.value.trim();
+    const borrower = loanBorrowerInput.value.trim();
+    const department = loanDepartmentInput.value.trim();
+    const loan_date = loanDateInput.value;
+    const isUnlimited = loanExpectedUnlimited.checked;
+    const expected_return = isUnlimited ? null : loanExpectedReturnInput.value;
+    const purpose = loanPurposeInput.value.trim();
+    const note = loanNoteInput.value.trim();
+
+    if(!contract_name || !borrower || !loan_date) return;
+    if(!isUnlimited && !expected_return) return;
+
+    if(editingLoanId){
+      // ---- edit existing loan ----
+      const id = editingLoanId;
+      const l = loans.find(x => x.id === id);
+      if(!l) return;
+      const prev = { contract_name:l.contract_name, borrower:l.borrower, department:l.department, loan_date:l.loan_date, expectedReturn:l.expectedReturn, purpose:l.purpose, note:l.note };
+      l.contract_name = contract_name; l.borrower = borrower; l.department = department;
+      l.loan_date = loan_date; l.expectedReturn = expected_return; l.purpose = purpose; l.note = note;
+      saveLoanLocalBackup();
+      closeLoanModal();
+      renderContractAll();
+
+      const { error, missingCols } = await resilientWrite(LOAN_TABLE, 'update', { contract_name, borrower, department, loan_date, expected_return, purpose, note }, id);
+      warnMissingColumns(missingCols);
+      if(error){
+        console.error('更新合約借閱資料失敗：', error);
+        alert('儲存修改失敗，請檢查網路連線，或確認 Supabase 是否已建立 contract_loans 資料表。');
+        Object.assign(l, prev);
+        saveLoanLocalBackup();
+        renderContractAll();
+      }
+    }else{
+      // ---- add new loan ----
+      const newLoan = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+        contract_name, borrower, department, loan_date, expectedReturn:expected_return,
+        purpose, note, returnDate:null, returnNote:''
+      };
+      loans.push(newLoan);
+      saveLoanLocalBackup();
+      closeLoanModal();
+      renderContractAll();
+
+      const { error, missingCols } = await resilientWrite(LOAN_TABLE, 'insert', {
+        id:newLoan.id, contract_name, borrower, department, loan_date, expected_return, purpose, note,
+        return_date:null, return_note:''
+      });
+      warnMissingColumns(missingCols);
+      if(error){
+        console.error('新增合約借閱資料失敗：', error);
+        alert('新增失敗，請檢查網路連線，或確認 Supabase 是否已建立 contract_loans 資料表。');
+        loans = loans.filter(l => l.id !== newLoan.id);
+        saveLoanLocalBackup();
+        renderContractAll();
+      }
+    }
+  });
+
+  // ---- 標記歸還 modal ----
+  const loanReturnModalOverlay = document.getElementById('loanReturnModalOverlay');
+  const loanReturnDateInput = document.getElementById('loanReturnDate');
+  const loanReturnNoteInput = document.getElementById('loanReturnNote');
+
+  function openLoanReturnModal(id){
+    pendingReturnLoanId = id;
+    loanReturnDateInput.value = toLocalDateValue(new Date());
+    loanReturnNoteInput.value = '';
+    loanReturnModalOverlay.style.display = 'flex';
+  }
+  function closeLoanReturnModal(){
+    pendingReturnLoanId = null;
+    loanReturnModalOverlay.style.display = 'none';
+  }
+
+  async function toggleLoanReturn(id){
+    const l = loans.find(x => x.id === id);
+    if(!l) return;
+    if(!l.returnDate){
+      openLoanReturnModal(id);
+      return;
+    }
+    // 取消歸還：清除歸還資訊
+    const prev = { returnDate:l.returnDate, returnNote:l.returnNote };
+    l.returnDate = null;
+    l.returnNote = '';
+    saveLoanLocalBackup();
+    renderContractAll();
+    const { error, missingCols } = await resilientWrite(LOAN_TABLE, 'update', { return_date:null, return_note:null }, id);
+    warnMissingColumns(missingCols);
+    if(error){
+      console.error('更新合約借閱資料失敗：', error);
+      alert('更新失敗，請檢查網路連線或 Supabase 設定。');
+      Object.assign(l, prev);
+      saveLoanLocalBackup();
+      renderContractAll();
+    }
+  }
+
+  document.getElementById('loanReturnForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if(!pendingReturnLoanId) return;
+    const id = pendingReturnLoanId;
+    const l = loans.find(x => x.id === id);
+    if(!l) return;
+    const returnDate = loanReturnDateInput.value;
+    const returnNote = loanReturnNoteInput.value.trim();
+    if(!returnDate) return;
+
+    const prev = { returnDate:l.returnDate, returnNote:l.returnNote };
+    l.returnDate = returnDate;
+    l.returnNote = returnNote;
+    saveLoanLocalBackup();
+    closeLoanReturnModal();
+    renderContractAll();
+
+    const { error, missingCols } = await resilientWrite(LOAN_TABLE, 'update', { return_date:returnDate, return_note:returnNote }, id);
+    warnMissingColumns(missingCols);
+    if(error){
+      console.error('更新合約借閱資料失敗：', error);
+      alert('更新失敗，請檢查網路連線或 Supabase 設定。');
+      Object.assign(l, prev);
+      saveLoanLocalBackup();
+      renderContractAll();
+    }
+  });
+  document.getElementById('loanReturnModalClose').addEventListener('click', closeLoanReturnModal);
+  document.getElementById('loanReturnCancelBtn').addEventListener('click', closeLoanReturnModal);
+  loanReturnModalOverlay.addEventListener('click', (e) => {
+    if(e.target.id === 'loanReturnModalOverlay') closeLoanReturnModal();
+  });
+
+  async function deleteLoan(id){
+    if(!confirm('確定要刪除這筆合約借閱紀錄嗎？')) return;
+    const removed = loans.find(x => x.id === id);
+    loans = loans.filter(x => x.id !== id);
+    if(editingLoanId === id) closeLoanModal();
+    saveLoanLocalBackup();
+    renderContractAll();
+    const { error } = await sb.from(LOAN_TABLE).delete().eq('id', id);
+    if(error){
+      console.error('刪除合約借閱資料失敗：', error);
+      alert('刪除失敗，請檢查網路連線或 Supabase 設定。');
+      if(removed){ loans.push(removed); saveLoanLocalBackup(); renderContractAll(); }
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    const returnBtn = e.target.closest('.loan-return-btn');
+    const editBtn = e.target.closest('.loan-edit-btn');
+    const delBtn = e.target.closest('.loan-del-btn');
+    if(returnBtn){ toggleLoanReturn(returnBtn.dataset.id); }
+    if(editBtn){ startEditLoan(editBtn.dataset.id); }
+    if(delBtn){ deleteLoan(delBtn.dataset.id); }
+  });
+
   // refresh periodically so overdue badges / calendar stay live
-  setInterval(renderAll, 60000);
+  setInterval(() => { renderAll(); renderContractAll(); }, 60000);
 
   (async function init(){
     await load();
+    await loadLoans();
     renderAll();
+    renderContractAll();
   })();
 })();
 </script>
