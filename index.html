@@ -442,7 +442,9 @@
     white-space:nowrap;
   }
   .summary-item .si-actions .done-btn:hover{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
+  .summary-item .si-actions .hold-btn:hover{ background:var(--amber-bg); border-color:var(--amber); color:#8a5c14; }
   .summary-item .si-actions .edit-btn:hover{ background:#EEF0FB; border-color:#4A4FB0; color:#4A4FB0; }
+  .summary-item.is-hold{ border-color:var(--amber); background:var(--amber-bg); }
 
 
   .overdue-group{ margin-bottom:14px; }
@@ -510,6 +512,8 @@
 
   .card.done{ opacity:0.55; }
   .card.done .title{ text-decoration:line-through; color:var(--muted); }
+  .card.hold{ background:var(--amber-bg); }
+  .card.hold .stripe{ background:var(--amber); }
 
   .card .body{ min-width:0; }
   .title{
@@ -577,6 +581,7 @@
   .badge.soon{ background:var(--amber); color:#4a3510; }
   .badge.ok{ background:var(--low-bg); color:var(--ink-soft); }
   .badge.unlimited{ background:var(--note-bg); color:var(--note-text); }
+  .badge.hold{ background:var(--amber-bg); color:#8a5c14; }
 
   .actions{
     display:flex;
@@ -597,6 +602,8 @@
     white-space:nowrap;
   }
   .actions .done-btn:hover{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
+  .actions .hold-btn:hover{ background:var(--amber-bg); border-color:var(--amber); color:#8a5c14; }
+  .actions .hold-btn.active{ background:var(--amber-bg); border-color:var(--amber); color:#8a5c14; }
   .actions .edit-btn:hover{ background:#EEF0FB; border-color:#4A4FB0; color:#4A4FB0; }
   .actions .del-btn:hover{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
 
@@ -882,6 +889,7 @@
   <div class="stat-strip">
     <div class="stat"><b id="statTotal">0</b>總計</div>
     <div class="stat"><b id="statActive">0</b>進行中</div>
+    <div class="stat"><b id="statHold">0</b>暫緩</div>
     <div class="stat warn"><b id="statOverdue">0</b>已逾期</div>
   </div>
 </div>
@@ -991,6 +999,12 @@
         </div>
         <div class="summary-groups" id="overdueGroups"></div>
       </div>
+      <div class="summary-col">
+        <div class="summary-head">
+          <h2>暫緩中的工作項目</h2>
+        </div>
+        <div class="summary-list" id="onHoldList"></div>
+      </div>
     </div>
   </div>
 
@@ -1005,6 +1019,7 @@
         <div class="seg" id="filterSeg">
           <button data-filter="active">進行中</button>
           <button data-filter="all" class="active">全部</button>
+          <button data-filter="hold">暫緩</button>
           <button data-filter="done">已完成</button>
         </div>
         <div class="seg" id="urgencySeg">
@@ -1203,6 +1218,26 @@
   </div>
 </div>
 
+<!-- mark/unmark-hold modal -->
+<div class="modal-overlay" id="holdModalOverlay" style="display:none;">
+  <div class="modal-box complete-modal-box">
+    <div class="modal-head">
+      <h3 id="holdModalTitle">標記暫緩</h3>
+      <button class="modal-close" id="holdModalClose">✕</button>
+    </div>
+    <form id="holdForm">
+      <div class="field">
+        <label for="holdNote">說明欄（選填）</label>
+        <textarea id="holdNote" placeholder="補充說明，例如暫緩原因、復工條件..."></textarea>
+      </div>
+      <div class="complete-modal-actions">
+        <button type="button" class="cancel-edit-btn" id="holdCancelBtn">取消</button>
+        <button type="submit" class="submit-btn" id="holdSubmitBtn">確認</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
@@ -1281,6 +1316,8 @@
         if(t.progress === undefined || t.progress === null) t.progress = '';
         t.completedAt = t.completed_at || null;
         t.completeNote = t.complete_note || '';
+        t.onHold = !!t.on_hold;
+        t.holdNote = t.hold_note || '';
         // migrate old urgency values (high/mid/low) to new scheme
         if(t.urgency === 'mid') t.urgency = 'normal';
         if(t.urgency === 'low') t.urgency = 'note';
@@ -1410,6 +1447,7 @@
     let list = tasks.slice();
     if(filterMode === 'active') list = list.filter(t => !t.done);
     if(filterMode === 'done') list = list.filter(t => t.done);
+    if(filterMode === 'hold') list = list.filter(t => t.onHold);
     if(urgencyFilter !== 'all') list = list.filter(t => t.urgency === urgencyFilter);
     if(sourceFilter !== 'all') list = list.filter(t => (t.source || '(未填寫來源)') === sourceFilter);
     if(categoryFilter === 'none') list = list.filter(t => !t.category);
@@ -1448,20 +1486,23 @@
       else if(status.key === 'unlimited') badgeHtml = `<span class="badge unlimited">${status.label}</span>`;
       else badgeHtml = `<span class="badge ok">${status.label}</span>`;
     }
-    const sourceHtml = t.source ? `<span class="source">來源：${escapeHtml(t.source)}</span>` : '';
+    const holdBadgeHtml = (t.onHold && !t.done) ? `<span class="badge hold">⏸ 暫緩</span>` : '';    const sourceHtml = t.source ? `<span class="source">來源：${escapeHtml(t.source)}</span>` : '';
     const categoryHtml = t.category ? `<span class="category">類別：${escapeHtml(t.category)}</span>` : '';
     const urgencyTagHtml = isSimpleCategory(t.category) ? '' : `<span class="tag u-${t.urgency}">${urgencyLabel[t.urgency]}</span>`;
     const completeInfoHtml = t.done && t.completedAt
       ? `<span class="badge ok">✅ 完成：${fmtDate(t.completedAt)}</span>`
       : '';
-    const completeNoteHtml = t.done && t.completeNote
-      ? `<span class="complete-note">說明：${escapeHtml(t.completeNote)}</span>`
+    const completeNoteHtml = t.completeNote
+      ? `<span class="complete-note">完成說明：${escapeHtml(t.completeNote)}</span>`
+      : '';
+    const holdNoteHtml = t.holdNote
+      ? `<span class="complete-note">暫緩說明：${escapeHtml(t.holdNote)}</span>`
       : '';
     const progressHtml = t.progress
       ? `<span class="complete-note">進度：${escapeHtml(t.progress)}</span>`
       : '';
     return `
-      <div class="card u-${t.urgency}${t.done ? ' done' : ''}">
+      <div class="card u-${t.urgency}${t.done ? ' done' : ''}${(t.onHold && !t.done) ? ' hold' : ''}">
         <div class="stripe"></div>
         <div class="body">
           <p class="title">${escapeHtml(t.title)}</p>
@@ -1472,13 +1513,16 @@
             <span>收到：${fmtDate(t.received)}</span>
             <span>結案：${fmtDate(t.deadline)}</span>
             ${badgeHtml}
+            ${holdBadgeHtml}
             ${completeInfoHtml}
             ${progressHtml}
+            ${holdNoteHtml}
             ${completeNoteHtml}
           </div>
         </div>
         <div class="actions">
           <button class="done-btn" data-id="${t.id}">${t.done ? '取消完成' : '標記完成'}</button>
+          <button class="hold-btn${t.onHold ? ' active' : ''}" data-id="${t.id}">${t.onHold ? '取消暫緩' : '標記暫緩'}</button>
           <button class="edit-btn" data-id="${t.id}">編輯</button>
           <button class="del-btn" data-id="${t.id}">刪除</button>
         </div>
@@ -1488,6 +1532,7 @@
   function renderStats(){
     document.getElementById('statTotal').textContent = tasks.length;
     document.getElementById('statActive').textContent = tasks.filter(t=>!t.done).length;
+    document.getElementById('statHold').textContent = tasks.filter(t=>t.onHold && !t.done).length;
     document.getElementById('statOverdue').textContent = tasks.filter(t=>!t.done && deadlineStatus(t.deadline,false).key==='overdue').length;
   }
 
@@ -1828,14 +1873,16 @@
     const urgencyHtml = isSimple ? '' : `<span class="tag u-${t.urgency}">${urgencyLabel[t.urgency]}</span>`;
     const dotUrgency = isSimple ? 'normal' : t.urgency;
     const doneBtnHtml = showDoneBtn ? `<button class="done-btn" data-id="${t.id}">完成</button>` : '';
+    const holdBtnHtml = `<button class="hold-btn${t.onHold ? ' active' : ''}" data-id="${t.id}">${t.onHold ? '取消暫緩' : '暫緩'}</button>`;
     const deadlineText = t.deadline ? fmtDate(t.deadline) : '不限';
     return `
-      <div class="summary-item" data-id="${t.id}">
+      <div class="summary-item${t.onHold ? ' is-hold' : ''}" data-id="${t.id}">
         <span class="dot dot-${dotUrgency}"></span>
         <span class="si-title">${escapeHtml(t.title)}</span>
         <span class="si-meta">${catHtml}${urgencyHtml}<span class="si-date">${fmtDate(shownDate)}</span><span class="si-deadline">deadline：${deadlineText}</span></span>
         <span class="si-actions">
           ${doneBtnHtml}
+          ${holdBtnHtml}
           <button class="edit-btn" data-id="${t.id}">編輯</button>
         </span>
       </div>`;
@@ -1935,6 +1982,14 @@
     document.getElementById('overdueGroups').innerHTML = groups.length
       ? groupsHtml
       : `<div class="summary-empty">沒有未完成的過期工作 🎉</div>`;
+
+    const onHoldEntries = tasks
+      .filter(t => t.onHold && !t.done)
+      .map(t => ({ t, dateStr: t.deadline || t.received }));
+    onHoldEntries.sort(byDateThenUrgency);
+    document.getElementById('onHoldList').innerHTML = onHoldEntries.length
+      ? onHoldEntries.map(e => summaryItemHtml(e.t, e.dateStr, true)).join('')
+      : `<div class="summary-empty">目前沒有暫緩中的工作</div>`;
   }
 
   // ---- add / edit form helpers ----
@@ -2058,7 +2113,7 @@
       const newTask = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
         title, source, progress, category, received, deadline, urgency, done:false,
-        completedAt:null, completeNote:''
+        completedAt:null, completeNote:'', onHold:false, holdNote:''
       };
       tasks.push(newTask);
       saveLocalBackup();
@@ -2067,7 +2122,7 @@
 
       const { error, missingCols } = await resilientWrite(TABLE, 'insert', {
         id:newTask.id, title, source, progress, category, received, deadline, urgency, done:false,
-        completed_at:null, complete_note:''
+        completed_at:null, complete_note:'', on_hold:false, hold_note:''
       });
       warnMissingColumns(missingCols);
       if(error){
@@ -2088,9 +2143,10 @@
   const completeNoteInput = document.getElementById('completeNote');
 
   function openCompleteModal(id){
+    const t = tasks.find(x => x.id === id);
     pendingCompleteId = id;
     completedAtInput.value = toLocalDateValue(new Date());
-    completeNoteInput.value = '';
+    completeNoteInput.value = (t && t.completeNote) || '';
     completeModalOverlay.style.display = 'flex';
   }
   function closeCompleteModal(){
@@ -2106,14 +2162,13 @@
       openCompleteModal(id);
       return;
     }
-    // un-marking: clear the completion details
-    const prev = { done:t.done, completedAt:t.completedAt, completeNote:t.completeNote };
+    // un-marking: keep the completion note (so it isn't lost), just clear the completed flag/date
+    const prev = { done:t.done, completedAt:t.completedAt };
     t.done = false;
     t.completedAt = null;
-    t.completeNote = '';
     saveLocalBackup();
     renderAll();
-    const { error, missingCols } = await resilientWrite(TABLE, 'update', { done:false, completed_at:null, complete_note:null }, id);
+    const { error, missingCols } = await resilientWrite(TABLE, 'update', { done:false, completed_at:null }, id);
     warnMissingColumns(missingCols);
     if(error){
       console.error('更新 Supabase 失敗：', error);
@@ -2123,6 +2178,65 @@
       renderAll();
     }
   }
+
+  // ---- mark/unmark-hold modal ----
+  let pendingHoldId = null;
+  let pendingHoldTarget = false; // the on-hold state we are switching TO
+  const holdModalOverlay = document.getElementById('holdModalOverlay');
+  const holdModalTitle = document.getElementById('holdModalTitle');
+  const holdNoteInput = document.getElementById('holdNote');
+  const holdSubmitBtn = document.getElementById('holdSubmitBtn');
+
+  function openHoldModal(id){
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    pendingHoldId = id;
+    pendingHoldTarget = !t.onHold;
+    holdModalTitle.textContent = pendingHoldTarget ? '標記暫緩' : '取消暫緩';
+    holdSubmitBtn.textContent = pendingHoldTarget ? '確認暫緩' : '確認取消暫緩';
+    holdNoteInput.value = t.holdNote || '';
+    holdModalOverlay.style.display = 'flex';
+  }
+  function closeHoldModal(){
+    pendingHoldId = null;
+    holdModalOverlay.style.display = 'none';
+  }
+
+  async function toggleHold(id){
+    openHoldModal(id);
+  }
+
+  document.getElementById('holdForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if(!pendingHoldId) return;
+    const id = pendingHoldId;
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    const holdNote = holdNoteInput.value.trim();
+    const targetOnHold = pendingHoldTarget;
+
+    const prev = { onHold:t.onHold, holdNote:t.holdNote };
+    t.onHold = targetOnHold;
+    t.holdNote = holdNote;
+    saveLocalBackup();
+    closeHoldModal();
+    renderAll();
+
+    const { error, missingCols } = await resilientWrite(TABLE, 'update', { on_hold:targetOnHold, hold_note:holdNote }, id);
+    warnMissingColumns(missingCols);
+    if(error){
+      console.error('更新 Supabase 失敗：', error);
+      alert('更新失敗，請檢查網路連線或 Supabase 設定。');
+      Object.assign(t, prev);
+      saveLocalBackup();
+      renderAll();
+    }
+  });
+  document.getElementById('holdModalClose').addEventListener('click', closeHoldModal);
+  document.getElementById('holdCancelBtn').addEventListener('click', closeHoldModal);
+  holdModalOverlay.addEventListener('click', (e) => {
+    if(e.target.id === 'holdModalOverlay') closeHoldModal();
+  });
 
   document.getElementById('completeForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2174,9 +2288,11 @@
   }
   document.addEventListener('click', (e) => {
     const doneBtn = e.target.closest('.done-btn');
+    const holdBtn = e.target.closest('.hold-btn');
     const editBtn = e.target.closest('.edit-btn');
     const delBtn = e.target.closest('.del-btn');
     if(doneBtn){ toggleDone(doneBtn.dataset.id); }
+    if(holdBtn){ toggleHold(holdBtn.dataset.id); }
     if(editBtn){ startEdit(editBtn.dataset.id); }
     if(delBtn){ deleteTask(delBtn.dataset.id); }
   });
@@ -2240,7 +2356,7 @@
   });
 
   // ---- sidebar summary item clicks (open work item detail) ----
-  ['thisWeekList', 'overdueGroups', 'thisWeekMeetingList', 'thisWeekTripList'].forEach(containerId => {
+  ['thisWeekList', 'overdueGroups', 'thisWeekMeetingList', 'thisWeekTripList', 'onHoldList'].forEach(containerId => {
     const container = document.getElementById(containerId);
     if(!container) return;
     container.addEventListener('click', (e) => {
@@ -2265,6 +2381,7 @@
     if(e.key === 'Escape'){
       closeDayModal();
       closeCompleteModal();
+      closeHoldModal();
       closeItemDetailModal();
       if(taskModalOverlay.style.display === 'flex') closeTaskModal();
       if(document.getElementById('loanModalOverlay').style.display === 'flex') closeLoanModal();
