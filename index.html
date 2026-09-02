@@ -26,6 +26,9 @@
     --note-bg:#ECEDF1;
     --note-text:#5B6472;
     --note-line:#C7CCD6;
+    --hold-bg:#E7E9F2;
+    --hold-text:#565F82;
+    --hold-line:#C9CEE0;
     --radius:10px;
     --shadow:0 1px 2px rgba(28,35,51,0.04), 0 4px 14px rgba(28,35,51,0.05);
   }
@@ -442,9 +445,9 @@
     white-space:nowrap;
   }
   .summary-item .si-actions .done-btn:hover{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
-  .summary-item .si-actions .hold-btn:hover{ background:var(--amber-bg); border-color:var(--amber); color:#8a5c14; }
+  .summary-item .si-actions .hold-btn:hover{ background:var(--hold-bg); border-color:var(--hold-line); color:var(--hold-text); }
   .summary-item .si-actions .edit-btn:hover{ background:#EEF0FB; border-color:#4A4FB0; color:#4A4FB0; }
-  .summary-item.is-hold{ border-color:var(--amber); background:var(--amber-bg); }
+  .summary-item.is-hold{ border-color:var(--hold-line); background:var(--hold-bg); }
 
 
   .overdue-group{ margin-bottom:14px; }
@@ -512,8 +515,8 @@
 
   .card.done{ opacity:0.55; }
   .card.done .title{ text-decoration:line-through; color:var(--muted); }
-  .card.hold{ background:var(--amber-bg); }
-  .card.hold .stripe{ background:var(--amber); }
+  .card.hold{ background:var(--hold-bg); }
+  .card.hold .stripe{ background:var(--hold-text); }
 
   .card .body{ min-width:0; }
   .title{
@@ -581,7 +584,7 @@
   .badge.soon{ background:var(--amber); color:#4a3510; }
   .badge.ok{ background:var(--low-bg); color:var(--ink-soft); }
   .badge.unlimited{ background:var(--note-bg); color:var(--note-text); }
-  .badge.hold{ background:var(--amber-bg); color:#8a5c14; }
+  .badge.hold{ background:var(--hold-bg); color:var(--hold-text); }
 
   .actions{
     display:flex;
@@ -602,8 +605,8 @@
     white-space:nowrap;
   }
   .actions .done-btn:hover{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
-  .actions .hold-btn:hover{ background:var(--amber-bg); border-color:var(--amber); color:#8a5c14; }
-  .actions .hold-btn.active{ background:var(--amber-bg); border-color:var(--amber); color:#8a5c14; }
+  .actions .hold-btn:hover{ background:var(--hold-bg); border-color:var(--hold-line); color:var(--hold-text); }
+  .actions .hold-btn.active{ background:var(--hold-bg); border-color:var(--hold-line); color:var(--hold-text); }
   .actions .edit-btn:hover{ background:#EEF0FB; border-color:#4A4FB0; color:#4A4FB0; }
   .actions .del-btn:hover{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
 
@@ -1897,7 +1900,7 @@
     document.getElementById('thisWeekMeetingRange').textContent = weekRangeStr;
     document.getElementById('thisWeekTripRange').textContent = weekRangeStr;
 
-    const pending = tasks.filter(t => !t.done);
+    const pending = tasks.filter(t => !t.done && !t.onHold);
     const thisWeekEntries = []; // 法務：本週待辦工作
     const meetingEntries = [];  // 會議：本週會議事項
     const tripEntries = [];     // 公差：本週出差
