@@ -282,7 +282,63 @@
     font-size:18px;
     margin:0;
   }
-  .controls{ display:flex; gap:8px; flex-wrap:wrap; }
+  .controls-top{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+  /* ---- grouped secondary filters ---- */
+  .filter-bar{
+    display:flex;
+    align-items:center;
+    gap:18px;
+    flex-wrap:wrap;
+    padding:12px 14px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:9px;
+    margin-bottom:8px;
+  }
+  .filter-group{ display:flex; align-items:center; gap:8px; }
+  .filter-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    font-weight:600;
+    color:var(--muted);
+    white-space:nowrap;
+  }
+  .filter-reset{
+    margin-left:auto;
+    border:1px solid transparent;
+    background:transparent;
+    color:var(--red);
+    font-size:12px;
+    font-weight:600;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+    padding:5px 8px;
+    border-radius:6px;
+  }
+  .filter-reset:hover{ background:var(--red-bg); }
+  .filter-summary{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--muted);
+    margin:0 0 16px 2px;
+  }
+  .filter-summary b{ color:var(--ink-soft); }
+
+  /* ---- list view ---- */
+  .list-view-toolbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .list-view-count{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--muted);
+  }
+
   .add-task-btn{
     border:none;
     background:var(--ink);
@@ -517,6 +573,31 @@
   .card.done .title{ text-decoration:line-through; color:var(--muted); }
   .card.hold{ background:var(--hold-bg); }
   .card.hold .stripe{ background:var(--hold-text); }
+
+  /* completed items in list view: playful instead of dimmed */
+  .card.done-playful{ opacity:1; background:var(--card); }
+  .card.done-playful .stripe{ background:linear-gradient(180deg, var(--teal), #7FB8A6); }
+  .card.done-playful .title{ text-decoration:none; color:var(--ink); }
+  .done-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    background:#F5E6EB;
+    color:#A6607A;
+    border-radius:20px;
+    padding:2px 10px;
+    font-size:11.5px;
+    font-weight:700;
+    font-family:'IBM Plex Mono',monospace;
+    margin-right:8px;
+    vertical-align:middle;
+    animation:done-pop .35s ease;
+  }
+  @keyframes done-pop{
+    0%{ transform:scale(0.7); opacity:0; }
+    60%{ transform:scale(1.08); opacity:1; }
+    100%{ transform:scale(1); }
+  }
 
   .card .body{ min-width:0; }
   .title{
@@ -851,6 +932,27 @@
   .loan-card.status-returned .stripe{ background:var(--note-line); }
   .loan-card.status-returned .title{ text-decoration:line-through; color:var(--muted); }
 
+  /* returned loans in list view: playful pill instead of dimmed/strikethrough,
+     matching how completed work items are shown in the list view */
+  .loan-card.done-playful{ opacity:1; background:var(--card); }
+  .loan-card.done-playful .stripe{ background:linear-gradient(180deg, #1B6E8C, #78BFD6); }
+  .loan-card.done-playful .title{ text-decoration:none; color:var(--ink); }
+  .returned-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    background:#DCEEF5;
+    color:#1B6E8C;
+    border-radius:20px;
+    padding:2px 10px;
+    font-size:11.5px;
+    font-weight:700;
+    font-family:'IBM Plex Mono',monospace;
+    margin-right:8px;
+    vertical-align:middle;
+    animation:done-pop .35s ease;
+  }
+
   .badge.returned{ background:var(--low-bg); color:var(--teal-deep); }
 
   @media (max-width:880px){
@@ -1015,37 +1117,50 @@
   <div class="main">
     <div class="list-head">
       <h1>所有工作</h1>
-      <div class="controls">
+      <div class="controls-top">
+        <input type="search" id="searchInput" class="search-input" placeholder="🔍 搜尋工作名稱或來源">
+        <div class="seg view-seg" id="viewSeg">
+          <button data-view="calendar" class="active">📅 日曆檢視</button>
+          <button data-view="list">📋 清單檢視</button>
+        </div>
         <button type="button" class="add-task-btn" id="openAddTaskBtn">＋ 新增工作</button>
         <button type="button" class="add-task-btn loan-btn" id="openAddLoanBtn">＋ 新增合約</button>
-        <input type="search" id="searchInput" class="search-input" placeholder="🔍 搜尋工作名稱或來源">
-        <div class="seg" id="filterSeg">
-          <button data-filter="active">進行中</button>
-          <button data-filter="all" class="active">全部</button>
-          <button data-filter="hold">暫緩</button>
-          <button data-filter="done">已完成</button>
-        </div>
-        <div class="seg" id="urgencySeg">
-          <button data-urgency="all" class="active">全部緊急度</button>
-          <button data-urgency="top">最急件</button>
-          <button data-urgency="high">急件</button>
-          <button data-urgency="normal">普通件</button>
-          <button data-urgency="note">備註</button>
-        </div>
+      </div>
+    </div>
+
+    <div class="filter-bar" id="filterBar">
+      <div class="filter-group">
+        <span class="filter-label">類別</span>
+        <select id="categoryFilterSelect" class="source-select"></select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">狀態</span>
+        <select id="statusFilterSelect" class="source-select">
+          <option value="active">進行中</option>
+          <option value="all" selected>全部</option>
+          <option value="hold">暫緩</option>
+          <option value="done">已完成</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">緊急度</span>
+        <select id="urgencyFilterSelect" class="source-select">
+          <option value="all" selected>全部</option>
+          <option value="top">最急件</option>
+          <option value="high">急件</option>
+          <option value="normal">普通件</option>
+          <option value="note">備註</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">來源</span>
         <select id="sourceFilter" class="source-select">
           <option value="all">全部來源</option>
         </select>
-        <select id="categoryFilter" class="source-select">
-          <option value="all">全部類別</option>
-          <option value="請假">請假</option>
-          <option value="會議">會議</option>
-          <option value="公差">公差</option>
-          <option value="法務">法務</option>
-          <option value="合約借閱">合約借閱</option>
-          <option value="none">其他</option>
-        </select>
       </div>
+      <button type="button" class="filter-reset" id="filterResetBtn" style="display:none;">✕ 清除篩選</button>
     </div>
+    <div class="filter-summary" id="filterSummary"></div>
 
     <!-- calendar view -->
     <div id="calendarWrap">
@@ -1060,6 +1175,23 @@
           <span class="sun">日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span class="sat">六</span>
         </div>
         <div class="cal-grid" id="calGrid"></div>
+      </div>
+    </div>
+
+    <!-- list view: flat, scannable list of everything the current filters match -->
+    <div id="listViewWrap" style="display:none;">
+      <div class="list-view-toolbar">
+        <span class="list-view-count" id="listViewCount"></span>
+        <select class="source-select" id="listSortSelect">
+          <option value="deadline">依結案日期排序</option>
+          <option value="received">依收到日期排序</option>
+          <option value="urgency">依緊急度排序</option>
+        </select>
+      </div>
+      <div class="cards" id="taskCards"></div>
+      <div class="empty" id="taskCardsEmpty" style="display:none;">
+        <div class="big">找不到符合條件的工作</div>
+        目前的篩選條件下沒有工作項目，試試清除篩選或切換類別
       </div>
     </div>
   </div>
@@ -1300,6 +1432,7 @@
   let urgencyFilter = 'all';
   let sourceFilter = 'all';
   let categoryFilter = 'all';
+  let viewMode = 'calendar'; // 'calendar' | 'list'
   let calRefDate = new Date();
   let modalDateKey = null;
   let editingId = null;
@@ -1465,6 +1598,100 @@
     return list;
   }
 
+  // ---- category quick-filter (chips) ----
+  const CATEGORY_DEFS = [
+    { key:'all', label:'全部' },
+    { key:'請假', label:'請假' },
+    { key:'會議', label:'會議' },
+    { key:'公差', label:'公差' },
+    { key:'法務', label:'法務' },
+    { key:'合約借閱', label:'合約借閱' },
+    { key:'none', label:'其他' },
+  ];
+
+  // same as filteredTasks() but ignores the category filter itself, so chip counts
+  // reflect "how many items would show if I picked this category" given the other active filters
+  function tasksMatchingOtherFilters(){
+    let list = tasks.slice();
+    if(filterMode === 'active') list = list.filter(t => !t.done);
+    if(filterMode === 'done') list = list.filter(t => t.done);
+    if(filterMode === 'hold') list = list.filter(t => t.onHold);
+    if(urgencyFilter !== 'all') list = list.filter(t => t.urgency === urgencyFilter);
+    if(sourceFilter !== 'all') list = list.filter(t => (t.source || '(未填寫來源)') === sourceFilter);
+    if(searchQuery){
+      const q = searchQuery.trim().toLowerCase();
+      if(q) list = list.filter(t => (t.title||'').toLowerCase().includes(q) || (t.source||'').toLowerCase().includes(q));
+    }
+    return list;
+  }
+  function loansMatchingOtherFilters(){
+    if(sourceFilter !== 'all') return [];
+    let list = loans.slice();
+    if(filterMode === 'active') list = list.filter(l => !l.returnDate);
+    if(filterMode === 'done') list = list.filter(l => !!l.returnDate);
+    list = list.filter(l => matchesSearch([l.contract_name, l.borrower]));
+    return list;
+  }
+  function categoryCount(key){
+    if(key === '合約借閱') return loansMatchingOtherFilters().length;
+    const base = tasksMatchingOtherFilters();
+    if(key === 'all') return base.length + loansMatchingOtherFilters().length;
+    if(key === 'none') return base.filter(t => !t.category).length;
+    return base.filter(t => t.category === key).length;
+  }
+  function renderCategoryOptions(){
+    const sel = document.getElementById('categoryFilterSelect');
+    sel.innerHTML = CATEGORY_DEFS.map(def => {
+      const count = categoryCount(def.key);
+      const label = def.key === 'all' ? `全部類別（${count}）` : `${def.label}（${count}）`;
+      return `<option value="${def.key}">${label}</option>`;
+    }).join('');
+    sel.value = categoryFilter;
+  }
+
+  function renderFilterSummary(){
+    const parts = [];
+    const filterLabels = { active:'進行中', hold:'暫緩中', done:'已完成' };
+    if(filterMode !== 'all') parts.push(filterLabels[filterMode]);
+    if(categoryFilter !== 'all') parts.push(categoryFilter === 'none' ? '其他類別' : categoryFilter);
+    if(urgencyFilter !== 'all') parts.push(urgencyLabel[urgencyFilter]);
+    if(sourceFilter !== 'all') parts.push(`來源：${sourceFilter}`);
+    if(searchQuery.trim()) parts.push(`搜尋「${searchQuery.trim()}」`);
+    const el = document.getElementById('filterSummary');
+    const resetBtn = document.getElementById('filterResetBtn');
+    const hasFilters = parts.length > 0;
+    resetBtn.style.display = hasFilters ? '' : 'none';
+    const totalCount = filteredTasks().length + filteredLoansForCalendar().length;
+    el.innerHTML = hasFilters
+      ? `目前顯示：<b>${parts.join('、')}</b>　共 ${totalCount} 筆`
+      : `顯示全部工作，共 ${totalCount} 筆`;
+  }
+
+  function sortTasksForList(list){
+    const sortMode = document.getElementById('listSortSelect').value;
+    const arr = list.slice();
+    if(sortMode === 'urgency') arr.sort(compareByUrgency);
+    else if(sortMode === 'received') arr.sort((a,b) => (b.received||'').localeCompare(a.received||''));
+    else arr.sort((a,b) => (a.deadline||'9999-99-99').localeCompare(b.deadline||'9999-99-99'));
+    return arr;
+  }
+
+  function renderListView(){
+    const tasksList = sortTasksForList(filteredTasks());
+    const loansList = filteredLoansForCalendar();
+    const total = tasksList.length + loansList.length;
+    document.getElementById('listViewCount').textContent = `共 ${total} 筆`;
+    const cardsEl = document.getElementById('taskCards');
+    const emptyEl = document.getElementById('taskCardsEmpty');
+    if(total === 0){
+      cardsEl.innerHTML = '';
+      emptyEl.style.display = '';
+    }else{
+      emptyEl.style.display = 'none';
+      cardsEl.innerHTML = tasksList.map(t => cardHtml(t, { listView:true })).join('') + loansList.map(l => loanCardHtml(l, { listView:true })).join('');
+    }
+  }
+
   function renderSourceOptions(){
     const sel = document.getElementById('sourceFilter');
     const sources = Array.from(new Set(tasks.map(t => t.source && t.source.trim() ? t.source.trim() : '(未填寫來源)'))).sort((a,b)=>a.localeCompare(b,'zh-Hant'));
@@ -1480,7 +1707,9 @@
     }
   }
 
-  function cardHtml(t){
+  function cardHtml(t, opts){
+    opts = opts || {};
+    const playfulDone = t.done && opts.listView;
     const status = deadlineStatus(t.deadline, t.done);
     let badgeHtml = '';
     if(!t.done){
@@ -1504,11 +1733,12 @@
     const progressHtml = t.progress
       ? `<span class="complete-note">進度：${escapeHtml(t.progress)}</span>`
       : '';
+    const titlePrefixHtml = playfulDone ? `<span class="done-pill">🥳 完成啦</span>` : '';
     return `
-      <div class="card u-${t.urgency}${t.done ? ' done' : ''}${(t.onHold && !t.done) ? ' hold' : ''}">
+      <div class="card u-${t.urgency}${t.done ? ' done' : ''}${playfulDone ? ' done-playful' : ''}${(t.onHold && !t.done) ? ' hold' : ''}">
         <div class="stripe"></div>
         <div class="body">
-          <p class="title">${escapeHtml(t.title)}</p>
+          <p class="title">${titlePrefixHtml}${escapeHtml(t.title)}</p>
           <div class="meta">
             ${urgencyTagHtml}
             ${categoryHtml}
@@ -1565,28 +1795,39 @@
     return 'dot-normal';
   }
 
-  function loanCardHtml(l){
+  function loanCardHtml(l, opts){
+    opts = opts || {};
     const status = loanStatus(l);
+    // 清單畫面比照工作項目「完成」的呈現方式：已歸還不用灰階刪除線，
+    // 改用小圓角標籤＋emoji 呈現，卡片保持正常樣式
+    const playfulReturned = status.key === 'returned' && opts.listView;
     let badgeHtml = '';
     if(status.key === 'overdue') badgeHtml = `<span class="badge overdue">⚠ ${status.label}</span>`;
     else if(status.key === 'soon') badgeHtml = `<span class="badge soon">⏰ ${status.label}</span>`;
     else if(status.key === 'unlimited') badgeHtml = `<span class="badge unlimited">${status.label}</span>`;
-    else if(status.key === 'returned') badgeHtml = `<span class="badge returned">✅ ${status.label}</span>`;
+    else if(status.key === 'returned'){
+      // 清單畫面已在抬頭用「📥 已歸還」小圓角標籤呈現，這裡不重複顯示同樣的狀態標籤
+      if(!playfulReturned) badgeHtml = `<span class="badge returned">✅ ${status.label}</span>`;
+    }
     else badgeHtml = `<span class="badge ok">${status.label}</span>`;
     const deptHtml = l.department ? `<span class="source">單位：${escapeHtml(l.department)}</span>` : '';
     const purposeHtml = l.purpose ? `<span class="complete-note">事由：${escapeHtml(l.purpose)}</span>` : '';
     const returnInfoHtml = l.returnDate
       ? `<span class="badge ok">📥 歸還日：${fmtDate(l.returnDate)}</span>`
       : '';
-    const returnNoteHtml = l.returnDate && l.returnNote
-      ? `<span class="complete-note">歸還說明：${escapeHtml(l.returnNote)}</span>`
+    // 標記歸還時填的說明，即使後來取消歸還也不會被清空；
+    // 只有在清單畫面才會呈現「取消歸還後仍保留」的說明文字，其他地方（例如詳情彈窗）
+    // 只在目前仍是「已歸還」狀態時顯示，行為與取消前一致
+    const returnNoteHtml = l.returnNote && (l.returnDate || opts.listView)
+      ? `<span class="complete-note">${l.returnDate ? '歸還說明' : '先前歸還說明'}：${escapeHtml(l.returnNote)}</span>`
       : '';
     const noteHtml = l.note ? `<span class="complete-note">備註：${escapeHtml(l.note)}</span>` : '';
+    const titlePrefixHtml = playfulReturned ? `<span class="returned-pill">📥 已歸還</span>` : '';
     return `
-      <div class="card loan-card status-${status.key}">
+      <div class="card loan-card status-${status.key}${playfulReturned ? ' done-playful' : ''}">
         <div class="stripe"></div>
         <div class="body">
-          <p class="title">${escapeHtml(l.contract_name)}</p>
+          <p class="title">${titlePrefixHtml}${escapeHtml(l.contract_name)}</p>
           <div class="meta">
             <span class="source">借閱人：${escapeHtml(l.borrower)}</span>
             ${deptHtml}
@@ -1607,12 +1848,14 @@
       </div>`;
   }
 
-  // 合約借閱不再有獨立分頁，新增／編輯／刪除／歸還後只需要刷新右側欄摘要，
-  // 以及中間區塊的日曆（借閱日期／預計歸還／實際歸還都會顯示在日曆上）
+  // 合約借閱不再有獨立分頁，新增／編輯／刪除／歸還後除了刷新右側欄摘要、
+  // 中間區塊的日曆（借閱日期／預計歸還／實際歸還都會顯示在日曆上），
+  // 若目前是「清單檢視」畫面，也要一併刷新，否則歸還後的標籤／按鈕不會更新
   function renderContractAll(){
     renderLoanSidebar();
     renderMonth();
     if(modalDateKey) renderModal();
+    if(viewMode === 'list') renderListView();
   }
 
   // ---- 右側欄「合約借閱」摘要（借出中／逾期未還的合約，隨時可在工作排程畫面看到）----
@@ -1638,14 +1881,18 @@
   }
 
   function renderLoanSidebar(){
-    const list = loans.filter(l => !l.returnDate).sort(compareLoans);
+    // loans have no matching "工作來源" field — once a specific source is
+    // selected in the main filter bar, this panel shouldn't keep showing them
+    const list = sourceFilter === 'all' ? loans.filter(l => !l.returnDate).sort(compareLoans) : [];
     const rangeEl = document.getElementById('loanSidebarRange');
     if(rangeEl) rangeEl.textContent = list.length ? `借出中 ${list.length} 筆` : '';
     const container = document.getElementById('loanSidebarList');
     if(!container) return;
     container.innerHTML = list.length
       ? list.map(loanSummaryItemHtml).join('')
-      : `<div class="summary-empty">目前沒有借出中的合約 🎉</div>`;
+      : (sourceFilter !== 'all'
+          ? `<div class="summary-empty">已套用「來源」篩選，合約借閱不適用<br>選回「全部來源」即可查看</div>`
+          : `<div class="summary-empty">目前沒有借出中的合約 🎉</div>`);
   }
 
   function compareByDeadline(a,b){
@@ -1727,6 +1974,9 @@
   }
   function filteredLoansForCalendar(){
     if(!loanCategoryAllowed()) return [];
+    // loans have no "工作來源" field to match against, so once a specific source
+    // is selected they shouldn't show up as if they matched it
+    if(sourceFilter !== 'all') return [];
     let list = loans.slice();
     if(filterMode === 'active') list = list.filter(l => !l.returnDate);
     if(filterMode === 'done') list = list.filter(l => !!l.returnDate);
@@ -1828,6 +2078,13 @@
     document.getElementById('itemDetailCards').innerHTML = cardHtml(t);
     document.getElementById('itemDetailModalOverlay').style.display = 'flex';
   }
+  function openLoanDetailModal(id){
+    const l = loans.find(x => x.id === id);
+    if(!l) return;
+    document.getElementById('itemDetailTitle').textContent = l.contract_name;
+    document.getElementById('itemDetailCards').innerHTML = loanCardHtml(l);
+    document.getElementById('itemDetailModalOverlay').style.display = 'flex';
+  }
   function closeItemDetailModal(){
     document.getElementById('itemDetailModalOverlay').style.display = 'none';
   }
@@ -1847,9 +2104,13 @@
 
   function renderAll(){
     renderSourceOptions();
-    renderMonth();
+    renderCategoryOptions();
+    renderFilterSummary();
+    if(viewMode === 'list') renderListView();
+    else renderMonth();
     renderStats();
     renderSummary();
+    renderLoanSidebar();
     if(modalDateKey) renderModal();
   }
 
@@ -2305,26 +2566,41 @@
     searchQuery = e.target.value;
     renderAll();
   });
-  document.getElementById('filterSeg').addEventListener('click', (e) => {
-    if(e.target.tagName !== 'BUTTON') return;
-    filterMode = e.target.dataset.filter;
-    [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
+  document.getElementById('statusFilterSelect').addEventListener('change', (e) => {
+    filterMode = e.target.value;
     renderAll();
   });
-  document.getElementById('urgencySeg').addEventListener('click', (e) => {
-    if(e.target.tagName !== 'BUTTON') return;
-    urgencyFilter = e.target.dataset.urgency;
-    [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
+  document.getElementById('urgencyFilterSelect').addEventListener('change', (e) => {
+    urgencyFilter = e.target.value;
     renderAll();
   });
   document.getElementById('sourceFilter').addEventListener('change', (e) => {
     sourceFilter = e.target.value;
     renderAll();
   });
-  document.getElementById('categoryFilter').addEventListener('change', (e) => {
+  document.getElementById('categoryFilterSelect').addEventListener('change', (e) => {
     categoryFilter = e.target.value;
     renderAll();
   });
+  document.getElementById('filterResetBtn').addEventListener('click', () => {
+    filterMode = 'all'; urgencyFilter = 'all'; sourceFilter = 'all'; categoryFilter = 'all'; searchQuery = '';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('statusFilterSelect').value = 'all';
+    document.getElementById('urgencyFilterSelect').value = 'all';
+    document.getElementById('sourceFilter').value = 'all';
+    renderAll();
+  });
+
+  // ---- calendar / list view toggle ----
+  document.getElementById('viewSeg').addEventListener('click', (e) => {
+    if(e.target.tagName !== 'BUTTON') return;
+    viewMode = e.target.dataset.view;
+    [...e.currentTarget.children].forEach(b => b.classList.toggle('active', b===e.target));
+    document.getElementById('calendarWrap').style.display = viewMode === 'list' ? 'none' : '';
+    document.getElementById('listViewWrap').style.display = viewMode === 'list' ? '' : 'none';
+    renderAll();
+  });
+  document.getElementById('listSortSelect').addEventListener('change', renderAll);
 
   // ---- calendar nav (year / month dropdowns) ----
   document.getElementById('calYearSelect').addEventListener('change', (e) => {
@@ -2369,14 +2645,14 @@
     });
   });
 
-  // 合約借閱側欄項目點擊：直接開啟編輯視窗（歸還/編輯按鈕仍交由既有的委派事件處理）
+  // 合約借閱側欄項目點擊：先開啟檢視用的詳情視窗（歸還/編輯/刪除按鈕仍交由既有的委派事件處理）
   (function(){
     const container = document.getElementById('loanSidebarList');
     if(!container) return;
     container.addEventListener('click', (e) => {
       if(e.target.closest('.si-actions')) return;
       const item = e.target.closest('.summary-item');
-      if(item && item.dataset.id) startEditLoan(item.dataset.id);
+      if(item && item.dataset.id) openLoanDetailModal(item.dataset.id);
     });
   })();
 
@@ -2449,6 +2725,7 @@
   function startEditLoan(id){
     const l = loans.find(x => x.id === id);
     if(!l) return;
+    closeItemDetailModal();
     editingLoanId = id;
     loanContractNameInput.value = l.contract_name;
     loanBorrowerInput.value = l.borrower;
@@ -2558,13 +2835,13 @@
       openLoanReturnModal(id);
       return;
     }
-    // 取消歸還：清除歸還資訊
-    const prev = { returnDate:l.returnDate, returnNote:l.returnNote };
+    // 取消歸還：只清除「目前是否已歸還」的狀態，
+    // 原本填寫的歸還說明文字保留不清空，之後在清單畫面仍看得到
+    const prev = { returnDate:l.returnDate };
     l.returnDate = null;
-    l.returnNote = '';
     saveLoanLocalBackup();
     renderContractAll();
-    const { error, missingCols } = await resilientWrite(LOAN_TABLE, 'update', { return_date:null, return_note:null }, id);
+    const { error, missingCols } = await resilientWrite(LOAN_TABLE, 'update', { return_date:null }, id);
     warnMissingColumns(missingCols);
     if(error){
       console.error('更新合約借閱資料失敗：', error);
