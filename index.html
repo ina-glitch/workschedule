@@ -806,24 +806,44 @@
   }
   .cal-weekdays span.sun{ color:var(--muted); }
   .cal-weekdays span.sat{ color:var(--muted); }
+  /* 日曆以「週」為單位排列：每週一列，連續工作的直條畫在該週的 .cal-bars 圖層上 */
   .cal-grid{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .cal-week{
+    --cell-pad:7px;
+    --num-h:16px;
+    --lane-h:20px;
+    --lane-gap:3px;
+    --lane-top:calc(1px + var(--cell-pad) + var(--num-h) + 4px);
+    position:relative;
     display:grid;
     grid-template-columns:repeat(7,1fr);
-    grid-auto-rows:118px;
     gap:6px;
+    height:118px;
   }
   .cal-day{
     background:var(--card);
     border:1px solid var(--line);
     border-radius:8px;
-    padding:7px;
-    height:118px;
-    overflow-y:auto;
-    overflow-x:hidden;
+    padding:var(--cell-pad);
+    overflow:hidden;
     display:flex;
     flex-direction:column;
     gap:4px;
     min-width:0;
+  }
+  .cal-day .lane-spacer{ flex:none; }
+  .cal-day .day-chips{
+    flex:1 1 auto;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    overflow-y:auto;
+    overflow-x:hidden;
   }
   .cal-day.has-tasks{ cursor:pointer; }
   .cal-day.has-tasks:hover{ border-color:var(--teal); }
@@ -832,6 +852,9 @@
   .cal-day.sat{ background:var(--weekend-bg); }
   .cal-day.today{ border-color:var(--teal); box-shadow:0 0 0 1px var(--teal) inset; }
   .cal-day .num{
+    flex:none;
+    height:var(--num-h);
+    line-height:var(--num-h);
     font-family:'IBM Plex Mono',monospace;
     font-size:11.5px;
     font-weight:600;
@@ -886,6 +909,36 @@
     font-family:'IBM Plex Mono',monospace;
   }
   .more-link:hover{ color:var(--teal-deep); }
+
+  /* ---- 連續工作（延續多日）：跨日期的直條 ---- */
+  .cal-bars{
+    position:absolute;
+    top:var(--lane-top);
+    left:0;
+    right:0;
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+    column-gap:6px;
+    grid-auto-rows:var(--lane-h);
+    row-gap:var(--lane-gap);
+    pointer-events:none;
+    z-index:2;
+  }
+  .cal-bar{
+    pointer-events:auto;
+    display:flex;
+    align-items:center;
+    box-sizing:border-box;
+    height:var(--lane-h);
+    margin:0 4px;
+    padding:0 7px;
+    min-width:0;
+  }
+  .cal-bar:hover{ filter:brightness(0.96); box-shadow:0 0 0 1px currentColor inset; }
+  /* 這段直條前後還有同一系列的其他日期（換週或狀態不同）時，該側改成直角、貼齊格線 */
+  .cal-bar.cont-left{ margin-left:0; border-top-left-radius:0; border-bottom-left-radius:0; }
+  .cal-bar.cont-right{ margin-right:0; border-top-right-radius:0; border-bottom-right-radius:0; }
+  .cal-bar.other-month{ opacity:0.38; }
 
   /* ---- modal ---- */
   .modal-overlay{
@@ -1104,8 +1157,7 @@
       margin-top:8px;
     }
     .stat-strip{ display:none; }
-    .cal-grid{ grid-auto-rows:80px; }
-    .cal-day{ height:80px; padding:5px; }
+    .cal-week{ height:80px; --cell-pad:5px; --lane-h:17px; }
     .chip{ font-size:9.5px; }
   }
 </style>
@@ -1984,6 +2036,76 @@
       </div>`;
   }
 
+  // 連續工作（延續多日系列）的合併卡片：同一段連續工作只顯示一張卡片，
+  // 完成／暫緩／編輯／刪除都是針對這一整段。list 需為同一系列、依日期排序。
+  function groupCardHtml(list){
+    const rep = list[0];
+    const n = list.length;
+    const ids = list.map(x => x.id);
+    const pending = list.filter(x => !x.done);
+    const allDone = pending.length === 0;
+    const doneCount = n - pending.length;
+    const holdPending = pending.filter(x => x.onHold);
+    const allHold = pending.length > 0 && holdPending.length === pending.length;
+    const first = list[0].received, last = list[n - 1].received;
+    const total = seriesCount(rep.seriesId);
+    const inRange = tasks.filter(x => x.seriesId === rep.seriesId && x.received >= first && x.received <= last).length;
+    const spanLabel = `${inRange === n ? '連續' : '共'} ${n} 天`;
+    const dls = list.map(x => x.deadline).filter(Boolean).sort();
+    // 各筆內容相同時才顯示（例如進度、說明），不同就不顯示，避免只挑其中一筆
+    const same = (field) => { const v = list.map(x => x[field] || ''); return v.every(x => x === v[0]) ? v[0] : ''; };
+
+    let statusHtml = '';
+    if(pending.length){
+      const pendDls = pending.map(x => x.deadline).filter(Boolean).sort();
+      const status = deadlineStatus(pendDls[0] || null, false);
+      if(status.key === 'overdue') statusHtml = `<span class="badge overdue">⚠ ${status.label}</span>`;
+      else if(status.key === 'soon') statusHtml = `<span class="badge soon">⏰ ${status.label}</span>`;
+      else if(status.key === 'unlimited') statusHtml = `<span class="badge unlimited">${status.label}</span>`;
+      else statusHtml = `<span class="badge ok">${status.label}</span>`;
+    }
+    const holdHtml = allHold ? `<span class="badge hold">⏸ 暫緩</span>` : (holdPending.length ? `<span class="badge hold">⏸ 暫緩 ${holdPending.length} 天</span>` : '');
+    const doneHtml = allDone ? `<span class="badge ok">✅ 全部完成</span>` : (doneCount ? `<span class="badge ok">✅ 已完成 ${doneCount}/${n} 天</span>` : '');
+    const progress = same('progress'), doneNote = same('completeNote'), holdNote = same('holdNote');
+    const isSimple = isSimpleCategory(rep.category);
+
+    const doneTargets = allDone ? ids : pending.map(x => x.id);
+    const holdTargets = allHold ? holdPending.map(x => x.id) : pending.filter(x => !x.onHold).map(x => x.id);
+    const idsAttr = (arr) => arr.length > 1 ? ` data-ids="${arr.join(',')}"` : '';
+    const holdBtn = pending.length
+      ? `<button class="hold-btn${allHold ? ' active' : ''}" data-id="${holdTargets[0]}"${idsAttr(holdTargets)}>${allHold ? '取消暫緩' : '標記暫緩'}</button>`
+      : '';
+
+    return `
+      <div class="card u-${rep.urgency}${allDone ? ' done' : ''}${allHold ? ' hold' : ''}">
+        <div class="stripe"></div>
+        <div class="body">
+          <p class="title">${escapeHtml(rep.title)}</p>
+          <div class="meta">
+            ${isSimple ? '' : `<span class="tag u-${rep.urgency}">${urgencyLabel[rep.urgency]}</span>`}
+            ${rep.category ? `<span class="category">類別：${escapeHtml(rep.category)}</span>` : ''}
+            ${rep.source ? `<span class="source">來源：${escapeHtml(rep.source)}</span>` : ''}
+            <span class="badge series">${seriesKindLabel(rep.seriesId)}・${spanLabel}${total > n ? `（系列共 ${total} 筆）` : ''}</span>
+            <span>收到：${fmtRange(first, last)}</span>
+            <span>結案：${dls.length ? fmtRange(dls[0], dls[dls.length - 1]) : '不限'}</span>
+            ${statusHtml}
+            ${holdHtml}
+            ${doneHtml}
+            ${progress ? `<span class="complete-note">進度：${escapeHtml(progress)}</span>` : ''}
+            ${holdNote ? `<span class="complete-note">暫緩說明：${escapeHtml(holdNote)}</span>` : ''}
+            ${doneNote ? `<span class="complete-note">完成說明：${escapeHtml(doneNote)}</span>` : ''}
+          </div>
+        </div>
+        <div class="actions">
+          <button class="done-btn" data-id="${doneTargets[0]}"${idsAttr(doneTargets)}>${allDone ? '取消完成' : '標記完成'}</button>
+          ${holdBtn}
+          <button class="edit-btn" data-id="${rep.id}" data-scope="all">編輯</button>
+          <button class="copy-btn" data-id="${rep.id}">複製</button>
+          <button class="del-btn" data-id="${rep.id}"${idsAttr(ids)}>刪除</button>
+        </div>
+      </div>`;
+  }
+
   function renderStats(){
     document.getElementById('statTotal').textContent = tasks.length;
     document.getElementById('statActive').textContent = tasks.filter(t=>!t.done).length;
@@ -2244,6 +2366,76 @@
     monthSelect.innerHTML = monthsHtml;
   }
 
+  // ---- 連續工作（延續多日系列）在日曆上畫成跨日期的直條 ----
+  // 每一週（列）獨立計算：同一系列、日期相連、完成狀態相同的日子合併成一條直條。
+  // 每週最多 MAX_BAR_LANES 條並排，放不下的維持原本一天一個標籤，避免擠壓格子。
+  const MAX_BAR_LANES = 2;
+  function computeSpanBars(list, map, keys){
+    const keyIndex = new Map(keys.map((k, i) => [k, i]));
+    const rows = Math.ceil(keys.length / 7);
+    const perRow = Array.from({ length: rows }, () => []);
+    const bySeries = new Map();
+    list.forEach(t => {
+      const sid = t.seriesId;
+      if(sid && String(sid).startsWith('span_')){
+        if(!bySeries.has(sid)) bySeries.set(sid, []);
+        bySeries.get(sid).push(t);
+      }
+    });
+
+    bySeries.forEach((members, sid) => {
+      if(members.length < 2) return;
+      const sorted = members.slice().sort((a, b) => (a.received || '').localeCompare(b.received || ''));
+      const firstRec = sorted[0].received, lastRec = sorted[sorted.length - 1].received;
+      // 只有「收到日」那一筆標籤（不是 deadline／已完成標籤）才會變成直條的一部分
+      const eligible = sorted.filter(t => {
+        if(!keyIndex.has(t.received)) return false;
+        const arr = map[t.received];
+        return !!(arr && arr.some(e => e.task === t && e.tag === 'received'));
+      });
+      let cur = null;
+      eligible.forEach(t => {
+        const idx = keyIndex.get(t.received);
+        const row = Math.floor(idx / 7);
+        if(cur && cur.row === row && idx === cur.end + 1 && cur.done === !!t.done){
+          cur.end = idx;
+          cur.tasks.push(t);
+        }else{
+          cur = { sid, row, start: idx, end: idx, done: !!t.done, tasks: [t], lane: -1, firstRec, lastRec };
+          perRow[row].push(cur);
+        }
+      });
+    });
+
+    perRow.forEach(runs => {
+      runs.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+      const laneEnds = [];
+      runs.forEach(r => {
+        let l = laneEnds.findIndex(endIdx => endIdx < r.start);
+        if(l === -1){
+          if(laneEnds.length >= MAX_BAR_LANES) return; // 放不下：維持一天一個標籤
+          l = laneEnds.length;
+          laneEnds.push(r.end);
+        }else{
+          laneEnds[l] = r.end;
+        }
+        r.lane = l;
+      });
+    });
+
+    const result = perRow.map(runs => runs.filter(r => r.lane >= 0));
+    // 已畫成直條的那幾天，不再重複顯示一天一個的標籤
+    result.forEach(runs => runs.forEach(r => {
+      // 這段之前／之後還有同一系列的日期（換週、或狀態不同而分成另一條）→ 該側畫成直角
+      r.contLeft = r.tasks[0].received > r.firstRec;
+      r.contRight = r.tasks[r.tasks.length - 1].received < r.lastRec;
+      r.tasks.forEach(t => {
+        map[t.received] = (map[t.received] || []).filter(e => !(e.task === t && e.tag === 'received'));
+      });
+    }));
+    return result;
+  }
+
   function renderMonth(){
     const list = filteredTasks();
     const map = groupByDate(list);
@@ -2258,26 +2450,62 @@
     const start = new Date(year, month, 1 - firstWeekday);
     const todayKey = dateKey(new Date());
 
-    let html = '';
+    const cellDates = [];
     for(let i=0;i<totalCells;i++){
       const d = new Date(start);
       d.setDate(start.getDate() + i);
-      const key = dateKey(d);
-      const dayEntries = map[key] || [];
-      const isOther = d.getMonth() !== month;
-      const isToday = key === todayKey;
-      const weekdayIdx = i % 7;
-      const weekendClass = weekdayIdx === 0 ? ' sun' : (weekdayIdx === 6 ? ' sat' : '');
-      const CHIP_LIMIT = 3;
-      const shown = dayEntries.slice(0, CHIP_LIMIT);
-      const restCount = dayEntries.length - shown.length;
+      cellDates.push(d);
+    }
+    const keys = cellDates.map(dateKey);
+    const weekBars = computeSpanBars(list, map, keys);
 
-      html += `
-        <div class="cal-day${isOther?' other-month':''}${isToday?' today':''}${weekendClass}${dayEntries.length?' has-tasks':''}" data-key="${key}">
+    let html = '';
+    for(let w=0; w<totalCells/7; w++){
+      const runs = weekBars[w];
+      const cellLanes = new Array(7).fill(0);
+      runs.forEach(r => {
+        for(let c = r.start % 7; c <= r.end % 7; c++) cellLanes[c] = Math.max(cellLanes[c], r.lane + 1);
+      });
+
+      let cellsHtml = '';
+      for(let c=0; c<7; c++){
+        const i = w * 7 + c;
+        const d = cellDates[i];
+        const key = keys[i];
+        const dayEntries = map[key] || [];
+        const isOther = d.getMonth() !== month;
+        const isToday = key === todayKey;
+        const weekendClass = c === 0 ? ' sun' : (c === 6 ? ' sat' : '');
+        const lanes = cellLanes[c];
+        const CHIP_LIMIT = Math.max(1, 3 - lanes); // 直條佔掉的空間，相對減少一天內顯示的標籤數
+        const shown = dayEntries.slice(0, CHIP_LIMIT);
+        const restCount = dayEntries.length - shown.length;
+        const spacer = lanes > 0
+          ? `<div class="lane-spacer" style="height:calc(${lanes} * var(--lane-h) + ${lanes - 1} * var(--lane-gap))"></div>`
+          : '';
+        cellsHtml += `
+        <div class="cal-day${isOther?' other-month':''}${isToday?' today':''}${weekendClass}${(dayEntries.length || lanes)?' has-tasks':''}" data-key="${key}">
           <span class="num">${d.getDate()}</span>
-          ${shown.map(entry => chipHtml(entry, key)).join('')}
-          ${restCount > 0 ? `<span class="more-link" data-key="${key}">+${restCount} 更多</span>` : ''}
+          ${spacer}
+          <div class="day-chips">
+            ${shown.map(entry => chipHtml(entry, key)).join('')}
+            ${restCount > 0 ? `<span class="more-link" data-key="${key}">+${restCount} 更多</span>` : ''}
+          </div>
         </div>`;
+      }
+
+      const barsHtml = runs.map(r => {
+        const t0 = r.tasks[0];
+        const allOther = cellDates.slice(r.start, r.end + 1).every(d => d.getMonth() !== month);
+        const cls = ['chip', 'cal-bar', categoryClass(t0)];
+        if(r.done) cls.push('done');
+        if(r.contLeft) cls.push('cont-left');
+        if(r.contRight) cls.push('cont-right');
+        if(allOther) cls.push('other-month');
+        return `<div class="${cls.join(' ')}" style="grid-column:${r.start % 7 + 1} / span ${r.end - r.start + 1};grid-row:${r.lane + 1}" data-id="${t0.id}" data-ids="${r.tasks.map(x => x.id).join(',')}" title="${escapeHtml(t0.title)}（${r.tasks.length} 天）">${urgencyDotHtml(t0)}<span class="label-text">${escapeHtml(t0.title)}</span></div>`;
+      }).join('');
+
+      html += `<div class="cal-week">${cellsHtml}${barsHtml ? `<div class="cal-bars">${barsHtml}</div>` : ''}</div>`;
     }
     document.getElementById('calGrid').innerHTML = html;
   }
@@ -2293,16 +2521,24 @@
   }
 
   // ---- work item detail modal (sidebar summary lists) ----
-  function openItemDetailModal(id, idsStr){
-    const t = tasks.find(x => x.id === id);
-    if(!t) return;
-    // 合併項目：把這一組每一天的工作卡片都列出來
-    const groupTasks = idsStr
+  let itemDetailCtx = null; // { id, idsStr }：目前開著的詳情視窗在看哪個工作（或哪一段連續工作）
+  function renderItemDetail(){
+    if(!itemDetailCtx) return;
+    const { id, idsStr } = itemDetailCtx;
+    // 合併項目（連續工作）：同一段連續工作只顯示一張卡片
+    const group = idsStr
       ? idsStr.split(',').map(i => tasks.find(x => x.id === i)).filter(Boolean)
           .sort((a, b) => (a.received || '').localeCompare(b.received || ''))
       : [];
+    const t = group.length ? group[0] : tasks.find(x => x.id === id);
+    if(!t){ closeItemDetailModal(); return; }
     document.getElementById('itemDetailTitle').textContent = t.title;
-    document.getElementById('itemDetailCards').innerHTML = groupTasks.length > 1 ? groupTasks.map(cardHtml).join('') : cardHtml(t);
+    document.getElementById('itemDetailCards').innerHTML = group.length > 1 ? groupCardHtml(group) : cardHtml(t);
+  }
+  function openItemDetailModal(id, idsStr){
+    if(!tasks.find(x => x.id === id)) return;
+    itemDetailCtx = { id, idsStr: idsStr || '' };
+    renderItemDetail();
     document.getElementById('itemDetailModalOverlay').style.display = 'flex';
   }
   function openLoanDetailModal(id){
@@ -2310,9 +2546,11 @@
     if(!l) return;
     document.getElementById('itemDetailTitle').textContent = l.contract_name;
     document.getElementById('itemDetailCards').innerHTML = loanCardHtml(l);
+    itemDetailCtx = null;
     document.getElementById('itemDetailModalOverlay').style.display = 'flex';
   }
   function closeItemDetailModal(){
+    itemDetailCtx = null;
     document.getElementById('itemDetailModalOverlay').style.display = 'none';
   }
   function renderModal(){
@@ -2339,6 +2577,7 @@
     renderSummary();
     renderLoanSidebar();
     if(modalDateKey) renderModal();
+    if(itemDetailCtx) renderItemDetail(); // 完成／暫緩／刪除之後，詳情視窗跟著更新
   }
 
   // ---- work summary (this week / overdue-by-week) ----
@@ -2834,6 +3073,7 @@
     submitBtn.textContent = '儲存修改';
     cancelEditBtn.style.display = 'block';
     panelEl.classList.add('editing');
+    closeItemDetailModal();
     // 這筆若屬於系列，顯示「套用範圍」（只改這筆／這筆及之後／整個系列）
     setupScopeField(t);
     // 從左側合併項目按「編輯」：預設套用到整個系列（合併項本來就代表整段連續工作）
@@ -3137,23 +3377,24 @@
   async function toggleDone(id, idsStr){
     const t = tasks.find(x => x.id === id);
     if(!t) return;
+    const groupIds = parseGroupIds(idsStr);
     if(!t.done){
       // marking as done: collect completion date + optional note first
-      openCompleteModal(id, parseGroupIds(idsStr));
+      openCompleteModal(id, groupIds);
       return;
     }
     // un-marking: keep the completion note (so it isn't lost), just clear the completed flag/date
-    const prev = { done:t.done, completedAt:t.completedAt };
-    t.done = false;
-    t.completedAt = null;
+    // 合併卡片（一整段連續工作）→ 這一段裡已完成的全部一起取消完成
+    const targets = (groupIds || [id]).map(i => tasks.find(x => x.id === i)).filter(x => x && x.done);
+    if(!targets.length) return;
+    const prevs = new Map(targets.map(x => [x.id, { done:x.done, completedAt:x.completedAt }]));
+    targets.forEach(x => { x.done = false; x.completedAt = null; });
     saveLocalBackup();
     renderAll();
-    const { error, missingCols } = await resilientWrite(TABLE, 'update', { done:false, completed_at:null }, id);
-    warnMissingColumns(missingCols);
-    if(error){
-      console.error('更新 Supabase 失敗：', error);
+    const { failedIds } = await bulkUpdate(targets.map(x => x.id), { done:false, completed_at:null });
+    if(failedIds.length){
       alert('更新失敗，請檢查網路連線或 Supabase 設定。');
-      Object.assign(t, prev);
+      failedIds.forEach(i => { const x = tasks.find(y => y.id === i); if(x) Object.assign(x, prevs.get(i)); });
       saveLocalBackup();
       renderAll();
     }
@@ -3285,9 +3526,17 @@
     }
   }
 
-  async function deleteTask(id){
+  async function deleteTask(id, idsStr){
     const t = tasks.find(x => x.id === id);
     if(!t) return;
+    // 合併卡片（一整段連續工作）：刪除「這一段」或「整個系列」
+    const groupIds = parseGroupIds(idsStr);
+    if(groupIds && t.seriesId){
+      const groupTasks = groupIds.map(i => tasks.find(x => x.id === i)).filter(Boolean);
+      const allSiblings = tasks.filter(x => x.seriesId === t.seriesId);
+      openSeriesDeleteModal(t, allSiblings, groupTasks);
+      return;
+    }
     // 屬於「延續多日／每週重複」系列，且系列裡還有其他筆 → 讓使用者選擇刪除範圍
     const siblings = t.seriesId ? tasks.filter(x => x.seriesId === t.seriesId) : [];
     if(siblings.length > 1){ openSeriesDeleteModal(t, siblings); return; }
@@ -3301,10 +3550,29 @@
   const seriesDeleteFutureBtn = document.getElementById('seriesDeleteFuture');
   const seriesDeleteAllBtn = document.getElementById('seriesDeleteAll');
 
-  function openSeriesDeleteModal(t, siblings){
+  const seriesDeleteOneBtn = document.getElementById('seriesDeleteOne');
+  // groupTasks：從「連續工作合併卡片」進來時，代表卡片上的那一整段；選項改成「刪除這一段／整個系列」
+  function openSeriesDeleteModal(t, siblings, groupTasks){
     const all = siblings.slice().sort((a,b) => (a.received || '').localeCompare(b.received || ''));
     const future = all.filter(x => (x.received || '') >= (t.received || ''));
-    pendingSeriesDelete = { task:t, all, future };
+    const group = groupTasks && groupTasks.length > 1
+      ? groupTasks.slice().sort((a,b) => (a.received || '').localeCompare(b.received || ''))
+      : null;
+    pendingSeriesDelete = { task:t, all, future, group };
+    if(group){
+      const wholeSeries = group.length >= all.length;
+      document.getElementById('seriesDeleteDesc').textContent =
+        `「${t.title}」這一段連續工作共 ${group.length} 天（${fmtRange(group[0].received, group[group.length-1].received)}）` +
+        (wholeSeries ? '。要刪除嗎？' : `，整個系列共 ${all.length} 筆。要刪除哪些？`);
+      seriesDeleteOneBtn.textContent = wholeSeries ? `刪除這 ${group.length} 天` : `只刪除這一段（${group.length} 天）`;
+      seriesDeleteFutureBtn.style.display = 'none';
+      seriesDeleteAllBtn.style.display = wholeSeries ? 'none' : '';
+      seriesDeleteAllBtn.textContent = `刪除整個系列（${all.length} 筆）`;
+      seriesDeleteOverlay.style.display = 'flex';
+      return;
+    }
+    seriesDeleteOneBtn.textContent = '只刪除這一筆';
+    seriesDeleteAllBtn.style.display = '';
     document.getElementById('seriesDeleteDesc').textContent =
       `「${t.title}」是${seriesKindLabel(t.seriesId)}系列的其中一筆，這個系列共 ${all.length} 筆（${fmtDate(all[0].received)} ~ ${fmtDate(all[all.length-1].received)}）。要刪除哪些？`;
     // 「這筆及之後」若等於「只刪這一筆」或「整個系列」就不用多放一個選項
@@ -3320,10 +3588,10 @@
   }
   async function runSeriesDelete(scope){
     if(!pendingSeriesDelete) return;
-    const { task:t, all, future } = pendingSeriesDelete;
+    const { task:t, all, future, group } = pendingSeriesDelete;
     closeSeriesDeleteModal();
     if(scope === 'one'){
-      await removeTasks([t]);
+      await removeTasks(group || [t]);
     }else if(scope === 'future'){
       await removeTasks(future);
     }else{
@@ -3349,7 +3617,7 @@
     if(holdBtn){ toggleHold(holdBtn.dataset.id, holdBtn.dataset.ids); }
     if(editBtn){ startEdit(editBtn.dataset.id, editBtn.dataset.scope); }
     if(copyBtn){ startCopy(copyBtn.dataset.id); }
-    if(delBtn){ deleteTask(delBtn.dataset.id); }
+    if(delBtn){ deleteTask(delBtn.dataset.id, delBtn.dataset.ids); }
   });
 
   // ---- filters ----
@@ -3409,6 +3677,9 @@
 
   // ---- calendar cell & chip clicks ----
   document.getElementById('calGrid').addEventListener('click', (e) => {
+    // 連續工作的直條：開啟詳情，列出這一段每一天的工作卡片
+    const bar = e.target.closest('.cal-bar');
+    if(bar){ openItemDetailModal(bar.dataset.id, bar.dataset.ids); return; }
     const cell = e.target.closest('.cal-day');
     const key = e.target.dataset.key || (cell && cell.dataset.key);
     if(key && ((cell && cell.classList.contains('has-tasks')) || e.target.classList.contains('chip') || e.target.classList.contains('more-link'))){
