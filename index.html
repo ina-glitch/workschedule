@@ -961,6 +961,98 @@
 
   .badge.returned{ background:var(--low-bg); color:var(--teal-deep); }
 
+  /* ---- copy / repeat / series ---- */
+  .actions .copy-btn:hover{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
+  .badge.series{ background:#E4EEFC; color:#2F5DA8; }
+
+  .repeat-picker{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .repeat-picker input{ display:none; }
+  .repeat-picker label{
+    margin-bottom:0;
+    text-align:center;
+    padding:8px 2px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    font-size:11.5px;
+    font-weight:600;
+    cursor:pointer;
+    color:var(--ink-soft);
+    background:var(--card);
+    transition:all .15s ease;
+  }
+  .repeat-picker input:checked + label{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
+
+  .repeat-panel{
+    margin-top:10px;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--paper);
+  }
+  .repeat-panel .rp-label{
+    display:block;
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin:0 0 6px;
+  }
+  .repeat-panel .rp-block + .rp-block{ margin-top:12px; }
+  .repeat-panel .rp-presets{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .repeat-panel .rp-presets button{
+    font-size:11px;
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--teal-deep);
+    background:var(--low-bg);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:5px 9px;
+    cursor:pointer;
+  }
+  .repeat-panel .rp-presets button:hover{ background:#dfe9e5; }
+
+  .weekday-picker{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .weekday-picker input{ display:none; }
+  .weekday-picker label{
+    margin-bottom:0;
+    text-align:center;
+    padding:7px 0;
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:var(--card);
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .weekday-picker input:checked + label{ background:var(--teal); border-color:var(--teal); color:#fff; }
+
+  .repeat-preview{
+    margin-top:10px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    line-height:1.6;
+    color:var(--teal-deep);
+    background:var(--low-bg);
+    border-radius:7px;
+    padding:8px 10px;
+  }
+  .repeat-preview b{ font-size:13px; }
+  .repeat-preview.warn{ background:var(--red-bg); color:var(--red); }
+  .repeat-preview .rp-note{
+    display:block;
+    color:var(--ink-soft);
+    font-family:'Inter',sans-serif;
+    font-size:11.5px;
+  }
+
+  .series-delete-desc{ font-size:13px; color:var(--ink-soft); margin:0 0 16px; line-height:1.6; }
+  .series-delete-actions{ display:flex; flex-direction:column; gap:8px; }
+  .series-delete-actions .cancel-edit-btn,
+  .series-delete-actions .submit-btn{ margin-top:0; }
+  .submit-btn.danger{ background:var(--red); }
+  .submit-btn.danger:hover{ background:#a3332d; }
+
   @media (max-width:880px){
     .layout{ grid-template-columns:1fr; }
     .summary-sidebar{
@@ -1056,6 +1148,58 @@
           <input type="date" id="received" required>
           <button type="button" id="nowBtn">今天</button>
         </div>
+      </div>
+
+      <!-- 重複設定：僅在「新增／複製」時出現，編輯既有工作時隱藏 -->
+      <div class="field" id="repeatField">
+        <label>重複設定</label>
+        <div class="repeat-picker">
+          <input type="radio" name="repeatMode" id="r-none" value="none" checked>
+          <label for="r-none">不重複</label>
+          <input type="radio" name="repeatMode" id="r-span" value="span">
+          <label for="r-span">延續多日</label>
+          <input type="radio" name="repeatMode" id="r-weekly" value="weekly">
+          <label for="r-weekly">每週重複</label>
+        </div>
+
+        <!-- 延續性工作：從開始日期連續做到結束日期，例如週一至週五每天都要做 -->
+        <div class="repeat-panel" id="repeatSpanPanel" style="display:none;">
+          <div class="rp-block">
+            <span class="rp-label">連續做到</span>
+            <div class="row">
+              <input type="date" id="repeatSpanEnd">
+              <label class="unlimited-toggle"><input type="checkbox" id="repeatSkipWeekend" checked> 略過週六、日</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 重複性工作：每週固定星期幾要做，例如每週一 -->
+        <div class="repeat-panel" id="repeatWeeklyPanel" style="display:none;">
+          <div class="rp-block">
+            <span class="rp-label">每週的星期</span>
+            <div class="weekday-picker">
+              <input type="checkbox" name="repeatWeekday" id="wd-0" value="0"><label for="wd-0">日</label>
+              <input type="checkbox" name="repeatWeekday" id="wd-1" value="1"><label for="wd-1">一</label>
+              <input type="checkbox" name="repeatWeekday" id="wd-2" value="2"><label for="wd-2">二</label>
+              <input type="checkbox" name="repeatWeekday" id="wd-3" value="3"><label for="wd-3">三</label>
+              <input type="checkbox" name="repeatWeekday" id="wd-4" value="4"><label for="wd-4">四</label>
+              <input type="checkbox" name="repeatWeekday" id="wd-5" value="5"><label for="wd-5">五</label>
+              <input type="checkbox" name="repeatWeekday" id="wd-6" value="6"><label for="wd-6">六</label>
+            </div>
+          </div>
+          <div class="rp-block">
+            <span class="rp-label">重複到</span>
+            <input type="date" id="repeatWeeklyEnd">
+            <div class="rp-presets">
+              <button type="button" data-months="1">1 個月</button>
+              <button type="button" data-months="3">3 個月</button>
+              <button type="button" data-months="6">半年</button>
+              <button type="button" data-months="12">1 年</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="repeat-preview" id="repeatPreview" style="display:none;"></div>
       </div>
 
       <div class="field" id="urgencyField">
@@ -1379,6 +1523,23 @@
   </div>
 </div>
 
+<!-- 刪除「延續／每週重複」系列工作時，讓使用者選擇刪除範圍 -->
+<div class="modal-overlay" id="seriesDeleteModalOverlay" style="display:none;">
+  <div class="modal-box complete-modal-box">
+    <div class="modal-head">
+      <h3>刪除系列工作</h3>
+      <button type="button" class="modal-close" id="seriesDeleteClose">✕</button>
+    </div>
+    <p class="series-delete-desc" id="seriesDeleteDesc"></p>
+    <div class="series-delete-actions">
+      <button type="button" class="cancel-edit-btn" id="seriesDeleteOne">只刪除這一筆</button>
+      <button type="button" class="cancel-edit-btn" id="seriesDeleteFuture">刪除這一筆及之後的所有日期</button>
+      <button type="button" class="submit-btn danger" id="seriesDeleteAll">刪除整個系列</button>
+      <button type="button" class="cancel-edit-btn" id="seriesDeleteCancel">取消</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
@@ -1400,8 +1561,10 @@
       || /column "?([\w]+)"? .*does not exist/i.exec(error.message);
     return m ? m[1] : null;
   }
+  // payload 可以是單一物件，也可以是物件陣列（一次新增多筆，例如重複性工作）
   async function resilientWrite(table, kind, payload, id){
-    let body = { ...payload };
+    const isBatch = Array.isArray(payload);
+    let body = isBatch ? payload.map(p => ({ ...p })) : { ...payload };
     let missingCols = [];
     for(let attempt=0; attempt<6; attempt++){
       const query = kind === 'insert'
@@ -1410,8 +1573,10 @@
       const { error } = await query;
       if(!error) return { error:null, missingCols };
       const col = extractMissingColumn(error);
-      if(col && col in body){
-        delete body[col];
+      const hasCol = col && (isBatch ? (body.length > 0 && col in body[0]) : col in body);
+      if(hasCol){
+        if(isBatch) body.forEach(b => { delete b[col]; });
+        else delete body[col];
         missingCols.push(col);
         continue;
       }
@@ -1460,6 +1625,7 @@
         t.completeNote = t.complete_note || '';
         t.onHold = !!t.on_hold;
         t.holdNote = t.hold_note || '';
+        t.seriesId = t.series_id || '';
         // migrate old urgency values (high/mid/low) to new scheme
         if(t.urgency === 'mid') t.urgency = 'normal';
         if(t.urgency === 'low') t.urgency = 'note';
@@ -1561,7 +1727,7 @@
     const isSimple = isSimpleCategory(category);
     urgencyFieldEl.style.display = isSimple ? 'none' : '';
     deadlineFieldEl.style.display = isSimple ? 'none' : '';
-    receivedLabelEl.textContent = isSimple ? '工作時間' : '收到工作的日期';
+    updateReceivedLabel(isSimple);
     if(isSimple){
       document.getElementById('u-normal').checked = true;
       deadlineUnlimited.checked = true;
@@ -1740,6 +1906,7 @@
       ? `<span class="complete-note">進度：${escapeHtml(t.progress)}</span>`
       : '';
     const titlePrefixHtml = playfulDone ? `<span class="done-pill">🥳 完成啦</span>` : '';
+    const seriesBadgeHtml = t.seriesId ? `<span class="badge series">${seriesKindLabel(t.seriesId)}</span>` : '';
     return `
       <div class="card u-${t.urgency}${t.done ? ' done' : ''}${playfulDone ? ' done-playful' : ''}${(t.onHold && !t.done) ? ' hold' : ''}">
         <div class="stripe"></div>
@@ -1749,6 +1916,7 @@
             ${urgencyTagHtml}
             ${categoryHtml}
             ${sourceHtml}
+            ${seriesBadgeHtml}
             <span>收到：${fmtDate(t.received)}</span>
             <span>結案：${fmtDate(t.deadline)}</span>
             ${badgeHtml}
@@ -1763,6 +1931,7 @@
           <button class="done-btn" data-id="${t.id}">${t.done ? '取消完成' : '標記完成'}</button>
           <button class="hold-btn${t.onHold ? ' active' : ''}" data-id="${t.id}">${t.onHold ? '取消暫緩' : '標記暫緩'}</button>
           <button class="edit-btn" data-id="${t.id}">編輯</button>
+          <button class="copy-btn" data-id="${t.id}">複製</button>
           <button class="del-btn" data-id="${t.id}">刪除</button>
         </div>
       </div>`;
@@ -2296,7 +2465,182 @@
     submitBtn.textContent = '加入工作清單';
     cancelEditBtn.style.display = 'none';
     panelEl.classList.remove('editing');
+    resetRepeatControls();
   }
+
+  // ==== 重複設定：延續性工作（連續多日）／重複性工作（每週固定星期幾）====
+  // 做法：送出時依規則「展開」成多筆一般工作，每一筆都是獨立的工作紀錄，
+  // 可以各自標記完成、暫緩、編輯；同一批建立的工作共用一個 series_id，
+  // 之後刪除時可以選擇「只刪這一筆／這一筆以後／整個系列」。
+  const MAX_OCCURRENCES = 366;     // 一次最多建立幾筆
+  const MAX_RANGE_DAYS = 800;      // 開始到結束日期最長天數（避免誤填很遠的年份）
+  const repeatFieldEl = document.getElementById('repeatField');
+  const repeatSpanPanel = document.getElementById('repeatSpanPanel');
+  const repeatWeeklyPanel = document.getElementById('repeatWeeklyPanel');
+  const repeatSpanEnd = document.getElementById('repeatSpanEnd');
+  const repeatSkipWeekend = document.getElementById('repeatSkipWeekend');
+  const repeatWeeklyEnd = document.getElementById('repeatWeeklyEnd');
+  const repeatPreviewEl = document.getElementById('repeatPreview');
+  const weekdayBoxes = Array.from(document.querySelectorAll('input[name="repeatWeekday"]'));
+  let weekdaysTouched = false; // 使用者是否手動改過星期選擇（沒改過就跟著開始日期的星期走）
+
+  function newId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function addDaysStr(dateStr, n){
+    const d = parseDateLocal(dateStr);
+    d.setDate(d.getDate() + n);
+    return toLocalDateValue(d);
+  }
+  function daysBetween(aStr, bStr){
+    return Math.round((parseDateLocal(bStr) - parseDateLocal(aStr)) / 86400000);
+  }
+  function addMonthsStr(dateStr, n){
+    const d = parseDateLocal(dateStr);
+    const day = d.getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + n);
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(day, lastDay));
+    return toLocalDateValue(d);
+  }
+  function seriesKindLabel(seriesId){
+    return String(seriesId).startsWith('span_') ? '➡ 延續多日' : '🔁 每週重複';
+  }
+  function getRepeatMode(){
+    const checked = document.querySelector('input[name="repeatMode"]:checked');
+    return checked ? checked.value : 'none';
+  }
+  function updateReceivedLabel(isSimple){
+    if(isSimple === undefined) isSimple = isSimpleCategory(categoryInput.value);
+    const repeating = getRepeatMode() !== 'none';
+    if(isSimple) receivedLabelEl.textContent = repeating ? '開始日期' : '工作時間';
+    else receivedLabelEl.textContent = repeating ? '第一筆的收到日期' : '收到工作的日期';
+  }
+  function selectedWeekdays(){
+    return weekdayBoxes.filter(b => b.checked).map(b => Number(b.value));
+  }
+
+  // 依目前表單的設定，算出要建立的所有日期
+  function computeOccurrences(){
+    const mode = getRepeatMode();
+    const start = receivedInput.value;
+    if(mode === 'none') return { mode, dates: start ? [start] : [], error:'' };
+    if(!start) return { mode, dates:[], error:'請先選擇開始日期' };
+    const end = mode === 'span' ? repeatSpanEnd.value : repeatWeeklyEnd.value;
+    if(!end) return { mode, dates:[], error: mode === 'span' ? '請選擇要連續做到哪一天' : '請選擇要重複到哪一天' };
+    if(end < start) return { mode, dates:[], error:'結束日期不能早於開始日期' };
+    if(daysBetween(start, end) > MAX_RANGE_DAYS) return { mode, dates:[], error:'日期範圍太長，請縮短結束日期' };
+
+    const wanted = mode === 'weekly' ? new Set(selectedWeekdays()) : null;
+    if(mode === 'weekly' && wanted.size === 0) return { mode, dates:[], error:'請至少選擇一個星期' };
+    const skipWeekend = mode === 'span' && repeatSkipWeekend.checked;
+
+    const dates = [];
+    const cursor = parseDateLocal(start);
+    const endDate = parseDateLocal(end);
+    while(cursor <= endDate){
+      const wd = cursor.getDay();
+      const include = mode === 'weekly' ? wanted.has(wd) : !(skipWeekend && (wd === 0 || wd === 6));
+      if(include){
+        dates.push(toLocalDateValue(cursor));
+        if(dates.length > MAX_OCCURRENCES) return { mode, dates:[], error:`一次最多建立 ${MAX_OCCURRENCES} 筆，請縮短結束日期` };
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    if(dates.length === 0) return { mode, dates:[], error:'這段期間沒有符合的日期' };
+    return { mode, dates, error:'' };
+  }
+
+  // 編輯既有工作時，這一筆本身就是「第一筆」，只需要另外建立其餘日期
+  function datesToCreate(occ){
+    if(!editingId) return occ.dates;
+    return occ.dates.filter(d => d !== receivedInput.value);
+  }
+  function defaultSubmitLabel(){ return editingId ? '儲存修改' : '加入工作清單'; }
+
+  function updateRepeatPreview(){
+    const occ = computeOccurrences();
+    if(occ.mode === 'none'){
+      repeatPreviewEl.style.display = 'none';
+      repeatPreviewEl.innerHTML = '';
+      submitBtn.textContent = defaultSubmitLabel();
+      return;
+    }
+    repeatPreviewEl.style.display = '';
+    const dates = occ.error ? [] : datesToCreate(occ);
+    if(occ.error || dates.length === 0){
+      repeatPreviewEl.className = 'repeat-preview warn';
+      repeatPreviewEl.textContent = occ.error || '這段期間沒有需要另外建立的日期';
+      submitBtn.textContent = defaultSubmitLabel();
+      return;
+    }
+    repeatPreviewEl.className = 'repeat-preview';
+    const first = dates[0], last = dates[dates.length - 1];
+    const range = `${fmtDate(first)}${first === last ? '' : ' ~ ' + fmtDate(last)}`;
+    let html = editingId
+      ? `這一筆會保留，另外再建立 <b>${dates.length}</b> 筆：${range}`
+      : `將建立 <b>${dates.length}</b> 筆：${range}`;
+    if(!isSimpleCategory(categoryInput.value) && !deadlineUnlimited.checked){
+      html += `<span class="rp-note">每一筆的結案日期會依「收到日 → 結案日」的間隔往後順延</span>`;
+    }
+    repeatPreviewEl.innerHTML = html;
+    submitBtn.textContent = editingId ? `儲存並再建立 ${dates.length} 筆` : `加入 ${dates.length} 筆工作到清單`;
+  }
+
+  // 切換模式／開始日期改變時，幫忙帶入合理的預設值
+  function defaultSpanEnd(start){
+    const wd = parseDateLocal(start).getDay();
+    return addDaysStr(start, (5 - wd + 7) % 7); // 開始日之後（含當天）的第一個週五
+  }
+  function syncRepeatDefaults(){
+    const mode = getRepeatMode();
+    const start = receivedInput.value;
+    if(!start) return;
+    if(mode === 'span'){
+      if(!repeatSpanEnd.value || repeatSpanEnd.value < start) repeatSpanEnd.value = defaultSpanEnd(start);
+    }else if(mode === 'weekly'){
+      if(!weekdaysTouched){
+        const wd = parseDateLocal(start).getDay();
+        weekdayBoxes.forEach(b => { b.checked = Number(b.value) === wd; });
+      }
+      if(!repeatWeeklyEnd.value || repeatWeeklyEnd.value < start) repeatWeeklyEnd.value = addMonthsStr(start, 3);
+    }
+  }
+  function updateRepeatUI(){
+    const mode = getRepeatMode();
+    repeatSpanPanel.style.display = mode === 'span' ? '' : 'none';
+    repeatWeeklyPanel.style.display = mode === 'weekly' ? '' : 'none';
+    syncRepeatDefaults();
+    updateReceivedLabel();
+    updateRepeatPreview();
+  }
+  function resetRepeatControls(){
+    weekdaysTouched = false;
+    repeatFieldEl.style.display = '';
+    const none = document.getElementById('r-none');
+    if(none) none.checked = true;
+    repeatSpanEnd.value = '';
+    repeatWeeklyEnd.value = '';
+    repeatSkipWeekend.checked = true;
+    weekdayBoxes.forEach(b => { b.checked = false; });
+    updateRepeatUI();
+  }
+
+  document.querySelectorAll('input[name="repeatMode"]').forEach(r => r.addEventListener('change', updateRepeatUI));
+  weekdayBoxes.forEach(b => b.addEventListener('change', () => { weekdaysTouched = true; updateRepeatPreview(); }));
+  [repeatSpanEnd, repeatWeeklyEnd, repeatSkipWeekend].forEach(el => el.addEventListener('input', updateRepeatPreview));
+  repeatSkipWeekend.addEventListener('change', updateRepeatPreview);
+  repeatWeeklyPanel.querySelectorAll('.rp-presets button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if(!receivedInput.value) return;
+      repeatWeeklyEnd.value = addMonthsStr(receivedInput.value, Number(btn.dataset.months));
+      updateRepeatPreview();
+    });
+  });
+  // 開始日期（＝上方的日期欄位）改變、按「今天」、切換類別、切換「不限」時，預覽要跟著更新
+  receivedInput.addEventListener('input', () => { syncRepeatDefaults(); updateRepeatPreview(); });
+  document.getElementById('nowBtn').addEventListener('click', () => { syncRepeatDefaults(); updateRepeatPreview(); });
+  categoryInput.addEventListener('change', () => { updateReceivedLabel(); updateRepeatPreview(); });
+  deadlineUnlimited.addEventListener('change', updateRepeatPreview);
 
   document.getElementById('openAddTaskBtn').addEventListener('click', () => {
     resetFormToAddMode();
@@ -2336,11 +2680,55 @@
     submitBtn.textContent = '儲存修改';
     cancelEditBtn.style.display = 'block';
     panelEl.classList.add('editing');
+    // 編輯時也可以設定延續／重複：這一筆保留，另外依規則再建立其餘日期
+    document.getElementById('r-none').checked = true;
+    repeatFieldEl.style.display = '';
+    updateRepeatUI();
+    openTaskModal();
+    titleInput.focus();
+  }
+
+  // ---- 複製工作紀錄：把既有工作的內容帶進「新增」表單，日期預設為今天 ----
+  // 只複製內容（名稱、來源、進度、類別、緊急程度、結案間隔），
+  // 不複製完成／暫緩狀態，也不會沿用原本的系列。
+  function startCopy(id){
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    closeDayModal();
+    closeItemDetailModal();
+    resetFormToAddMode();
+    const today = toLocalDateValue(new Date());
+    titleInput.value = t.title;
+    sourceInput.value = t.source || '';
+    progressInput.value = t.progress || '';
+    categoryInput.value = t.category || '';
+    receivedInput.value = today;
+    if(t.deadline && t.received){
+      const gap = Math.max(0, daysBetween(t.received, t.deadline));
+      deadlineUnlimited.checked = false;
+      deadlineInput.disabled = false;
+      deadlineInput.required = true;
+      deadlineInput.value = addDaysStr(today, gap);
+    }else{
+      deadlineUnlimited.checked = true;
+      deadlineInput.disabled = true;
+      deadlineInput.required = false;
+      deadlineInput.value = '';
+    }
+    document.getElementById('u-' + t.urgency).checked = true;
+    applyCategoryMode(t.category || '');
+    formTitleEl.textContent = '複製工作';
+    formHintEl.textContent = '已帶入原工作內容，日期預設為今天，確認後按下方按鈕加入清單';
+    updateRepeatUI();
     openTaskModal();
     titleInput.focus();
   }
 
   cancelEditBtn.addEventListener('click', closeTaskModal);
+
+  function alertMissingSeriesColumn(){
+    alert('已建立這批工作，但 Supabase 的 tasks 資料表還沒有 series_id 欄位，\n重新整理後系統就無法辨識它們屬於同一個系列（無法整批刪除）。\n\n請到 Supabase 的 SQL Editor 執行：\nalter table tasks add column if not exists series_id text;\n\n（已建立的這批工作仍會正常儲存，只是不會有系列標記。）');
+  }
 
   // ---- form submit ----
   document.getElementById('taskForm').addEventListener('submit', async (e) => {
@@ -2360,47 +2748,120 @@
 
     if(editingId){
       // ---- edit existing task ----
+      // 若同時設定了延續／每週重複：這一筆保留（套用修改），另外依規則再建立其餘日期
       const id = editingId;
       const t = tasks.find(x => x.id === id);
       if(!t) return;
-      const prev = { title:t.title, source:t.source, progress:t.progress, category:t.category, received:t.received, deadline:t.deadline, urgency:t.urgency };
+
+      const occ = computeOccurrences();
+      if(occ.error){ alert(occ.error); return; }
+      const extraDates = occ.mode === 'none' ? [] : datesToCreate(occ);
+      if(occ.mode !== 'none' && extraDates.length === 0){ alert('這段期間沒有需要另外建立的日期'); return; }
+      // 這筆已經屬於某個系列 → 新增的加入同一個系列；否則開一個新系列，這一筆也一起納入
+      const seriesId = occ.mode === 'none' ? '' : (t.seriesId || ((occ.mode === 'span' ? 'span_' : 'rep_') + newId()));
+      const gap = (!isUnlimited && deadline) ? daysBetween(received, deadline) : null;
+
+      const prev = { title:t.title, source:t.source, progress:t.progress, category:t.category, received:t.received, deadline:t.deadline, urgency:t.urgency, seriesId:t.seriesId };
       t.title = title; t.source = source; t.progress = progress; t.category = category; t.received = received; t.deadline = deadline; t.urgency = urgency;
+      if(seriesId) t.seriesId = seriesId;
+
+      const extraTasks = extraDates.map(d => ({
+        id: newId(),
+        title, source, progress, category,
+        received: d,
+        deadline: gap === null ? null : addDaysStr(d, gap),
+        urgency, done:false,
+        completedAt:null, completeNote:'', onHold:false, holdNote:'',
+        seriesId
+      }));
+      const extraIds = new Set(extraTasks.map(x => x.id));
+      tasks.push(...extraTasks);
       saveLocalBackup();
       closeTaskModal();
       renderAll();
 
-      const { error, missingCols } = await resilientWrite(TABLE, 'update', { title, source, progress, category, received, deadline, urgency }, id);
-      warnMissingColumns(missingCols);
-      if(error){
-        console.error('更新到 Supabase 失敗：', error);
+      const updatePayload = { title, source, progress, category, received, deadline, urgency };
+      if(seriesId) updatePayload.series_id = seriesId;
+      const upd = await resilientWrite(TABLE, 'update', updatePayload, id);
+      warnMissingColumns(upd.missingCols);
+      if(upd.error){
+        console.error('更新到 Supabase 失敗：', upd.error);
         alert('儲存修改失敗，請檢查網路連線或 Supabase 設定。');
         Object.assign(t, prev);
+        tasks = tasks.filter(x => !extraIds.has(x.id));
         saveLocalBackup();
         renderAll();
+        return;
       }
+
+      let missing = upd.missingCols;
+      if(extraTasks.length){
+        const rows = extraTasks.map(x => ({
+          id:x.id, title, source, progress, category, received:x.received, deadline:x.deadline, urgency, done:false,
+          completed_at:null, complete_note:'', on_hold:false, hold_note:'', series_id:seriesId
+        }));
+        const ins = await resilientWrite(TABLE, 'insert', rows.length === 1 ? rows[0] : rows);
+        warnMissingColumns(ins.missingCols);
+        if(ins.error){
+          console.error('新增到 Supabase 失敗：', ins.error);
+          alert('這一筆的修改已儲存，但另外建立其餘日期失敗，請檢查網路連線或 Supabase 設定後再試一次。');
+          tasks = tasks.filter(x => !extraIds.has(x.id));
+          saveLocalBackup();
+          renderAll();
+          return;
+        }
+        missing = missing.concat(ins.missingCols);
+      }
+      if(seriesId && missing.includes('series_id')) alertMissingSeriesColumn();
     }else{
-      // ---- add new task ----
-      const newTask = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-        title, source, progress, category, received, deadline, urgency, done:false,
-        completedAt:null, completeNote:'', onHold:false, holdNote:''
-      };
-      tasks.push(newTask);
+      // ---- add new task(s)：不重複＝1 筆；延續多日／每週重複＝依規則展開成多筆 ----
+      const occ = computeOccurrences();
+      if(occ.error){ alert(occ.error); return; }
+      const seriesId = occ.mode === 'none' ? '' : ((occ.mode === 'span' ? 'span_' : 'rep_') + newId());
+      // 有結案日期時，每一筆都維持與「收到日期」相同的間隔
+      const gap = (!isUnlimited && deadline) ? daysBetween(received, deadline) : null;
+
+      const newTasks = occ.dates.map(d => ({
+        id: newId(),
+        title, source, progress, category,
+        received: d,
+        deadline: gap === null ? null : addDaysStr(d, gap),
+        urgency, done:false,
+        completedAt:null, completeNote:'', onHold:false, holdNote:'',
+        seriesId
+      }));
+      const newIds = new Set(newTasks.map(t => t.id));
+      tasks.push(...newTasks);
       saveLocalBackup();
       closeTaskModal();
       renderAll();
+      // 如果新增的日期不在目前顯示的月份，日曆跳到第一筆所在的月份，才看得到結果
+      if(occ.mode !== 'none' && viewMode === 'calendar'){
+        const first = parseDateLocal(newTasks[0].received);
+        if(first.getFullYear() !== calRefDate.getFullYear() || first.getMonth() !== calRefDate.getMonth()){
+          calRefDate = first;
+          renderAll();
+        }
+      }
 
-      const { error, missingCols } = await resilientWrite(TABLE, 'insert', {
-        id:newTask.id, title, source, progress, category, received, deadline, urgency, done:false,
-        completed_at:null, complete_note:'', on_hold:false, hold_note:''
+      const rows = newTasks.map(t => {
+        const row = {
+          id:t.id, title, source, progress, category, received:t.received, deadline:t.deadline, urgency, done:false,
+          completed_at:null, complete_note:'', on_hold:false, hold_note:''
+        };
+        if(t.seriesId) row.series_id = t.seriesId; // 只有系列工作才寫入，一般工作的寫入內容維持不變
+        return row;
       });
+      const { error, missingCols } = await resilientWrite(TABLE, 'insert', rows.length === 1 ? rows[0] : rows);
       warnMissingColumns(missingCols);
       if(error){
         console.error('新增到 Supabase 失敗：', error);
         alert('新增失敗，請檢查網路連線或 Supabase 設定。');
-        tasks = tasks.filter(t => t.id !== newTask.id);
+        tasks = tasks.filter(t => !newIds.has(t.id));
         saveLocalBackup();
         renderAll();
+      }else if(seriesId && missingCols.includes('series_id')){
+        alertMissingSeriesColumn();
       }
     }
   });
@@ -2542,28 +3003,87 @@
     if(e.target.id === 'completeModalOverlay') closeCompleteModal();
   });
 
-  async function deleteTask(id){
-    if(!confirm('確定要刪除這筆工作紀錄嗎？')) return;
-    const removed = tasks.find(x => x.id === id);
-    tasks = tasks.filter(x => x.id !== id);
-    if(editingId === id) closeTaskModal();
+  // removedList：要從畫面移除的工作；remoteDelete：實際對 Supabase 執行刪除的函式
+  async function removeTasks(removedList, remoteDelete){
+    const idSet = new Set(removedList.map(x => x.id));
+    tasks = tasks.filter(x => !idSet.has(x.id));
+    if(editingId && idSet.has(editingId)) closeTaskModal();
     saveLocalBackup();
     renderAll();
-    const { error } = await sb.from(TABLE).delete().eq('id', id);
+    const { error } = await remoteDelete();
     if(error){
       console.error('刪除 Supabase 資料失敗：', error);
       alert('刪除失敗，請檢查網路連線或 Supabase 設定。');
-      if(removed){ tasks.push(removed); saveLocalBackup(); renderAll(); }
+      tasks.push(...removedList);
+      saveLocalBackup();
+      renderAll();
     }
   }
+
+  async function deleteTask(id){
+    const t = tasks.find(x => x.id === id);
+    if(!t) return;
+    // 屬於「延續多日／每週重複」系列，且系列裡還有其他筆 → 讓使用者選擇刪除範圍
+    const siblings = t.seriesId ? tasks.filter(x => x.seriesId === t.seriesId) : [];
+    if(siblings.length > 1){ openSeriesDeleteModal(t, siblings); return; }
+    if(!confirm('確定要刪除這筆工作紀錄嗎？')) return;
+    await removeTasks([t], () => sb.from(TABLE).delete().eq('id', id));
+  }
+
+  // ---- 刪除系列工作 modal ----
+  let pendingSeriesDelete = null;
+  const seriesDeleteOverlay = document.getElementById('seriesDeleteModalOverlay');
+  const seriesDeleteFutureBtn = document.getElementById('seriesDeleteFuture');
+  const seriesDeleteAllBtn = document.getElementById('seriesDeleteAll');
+
+  function openSeriesDeleteModal(t, siblings){
+    const all = siblings.slice().sort((a,b) => (a.received || '').localeCompare(b.received || ''));
+    const future = all.filter(x => (x.received || '') >= (t.received || ''));
+    pendingSeriesDelete = { task:t, all, future };
+    document.getElementById('seriesDeleteDesc').textContent =
+      `「${t.title}」是${seriesKindLabel(t.seriesId)}系列的其中一筆，這個系列共 ${all.length} 筆（${fmtDate(all[0].received)} ~ ${fmtDate(all[all.length-1].received)}）。要刪除哪些？`;
+    // 「這筆及之後」若等於「只刪這一筆」或「整個系列」就不用多放一個選項
+    const showFuture = future.length > 1 && future.length < all.length;
+    seriesDeleteFutureBtn.style.display = showFuture ? '' : 'none';
+    seriesDeleteFutureBtn.textContent = `刪除 ${fmtDate(t.received)} 起的所有日期（${future.length} 筆）`;
+    seriesDeleteAllBtn.textContent = `刪除整個系列（${all.length} 筆）`;
+    seriesDeleteOverlay.style.display = 'flex';
+  }
+  function closeSeriesDeleteModal(){
+    pendingSeriesDelete = null;
+    seriesDeleteOverlay.style.display = 'none';
+  }
+  async function runSeriesDelete(scope){
+    if(!pendingSeriesDelete) return;
+    const { task:t, all, future } = pendingSeriesDelete;
+    closeSeriesDeleteModal();
+    if(scope === 'one'){
+      await removeTasks([t], () => sb.from(TABLE).delete().eq('id', t.id));
+    }else if(scope === 'future'){
+      await removeTasks(future, () => sb.from(TABLE).delete().eq('series_id', t.seriesId).gte('received', t.received));
+    }else{
+      await removeTasks(all, () => sb.from(TABLE).delete().eq('series_id', t.seriesId));
+    }
+  }
+  document.getElementById('seriesDeleteOne').addEventListener('click', () => runSeriesDelete('one'));
+  seriesDeleteFutureBtn.addEventListener('click', () => runSeriesDelete('future'));
+  seriesDeleteAllBtn.addEventListener('click', () => runSeriesDelete('all'));
+  document.getElementById('seriesDeleteCancel').addEventListener('click', closeSeriesDeleteModal);
+  document.getElementById('seriesDeleteClose').addEventListener('click', closeSeriesDeleteModal);
+  seriesDeleteOverlay.addEventListener('click', (e) => {
+    if(e.target.id === 'seriesDeleteModalOverlay') closeSeriesDeleteModal();
+  });
+
   document.addEventListener('click', (e) => {
     const doneBtn = e.target.closest('.done-btn');
     const holdBtn = e.target.closest('.hold-btn');
     const editBtn = e.target.closest('.edit-btn');
+    const copyBtn = e.target.closest('.copy-btn');
     const delBtn = e.target.closest('.del-btn');
     if(doneBtn){ toggleDone(doneBtn.dataset.id); }
     if(holdBtn){ toggleHold(holdBtn.dataset.id); }
     if(editBtn){ startEdit(editBtn.dataset.id); }
+    if(copyBtn){ startCopy(copyBtn.dataset.id); }
     if(delBtn){ deleteTask(delBtn.dataset.id); }
   });
 
@@ -2668,6 +3188,7 @@
       closeCompleteModal();
       closeHoldModal();
       closeItemDetailModal();
+      closeSeriesDeleteModal();
       if(taskModalOverlay.style.display === 'flex') closeTaskModal();
       if(document.getElementById('loanModalOverlay').style.display === 'flex') closeLoanModal();
       if(document.getElementById('loanReturnModalOverlay').style.display === 'flex') closeLoanReturnModal();
