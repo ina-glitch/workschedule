@@ -493,6 +493,14 @@
   }
   .summary-item .si-date{ white-space:nowrap; }
   .summary-item .si-deadline{ white-space:nowrap; }
+  .summary-item .si-span{
+    white-space:nowrap;
+    background:#E4EEFC;
+    color:#2F5DA8;
+    border-radius:4px;
+    padding:1px 6px;
+    font-weight:600;
+  }
   .summary-item .si-actions{ display:flex; gap:4px; flex-shrink:0; margin-left:auto; }
   .summary-item .si-actions button{
     border:1px solid var(--line);
@@ -1046,6 +1054,23 @@
     font-size:11.5px;
   }
 
+  .scope-info{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    margin:-2px 0 8px;
+  }
+  .scope-note{
+    margin-top:8px;
+    font-size:11.5px;
+    line-height:1.6;
+    color:var(--ink-soft);
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:8px 10px;
+  }
+
   .series-delete-desc{ font-size:13px; color:var(--ink-soft); margin:0 0 16px; line-height:1.6; }
   .series-delete-actions{ display:flex; flex-direction:column; gap:8px; }
   .series-delete-actions .cancel-edit-btn,
@@ -1109,6 +1134,24 @@
     </div>
 
     <form id="taskForm">
+      <!-- 編輯「延續／每週重複」系列中的一筆時，選擇修改要套用到哪些筆 -->
+      <div class="field" id="scopeField" style="display:none;">
+        <label>套用範圍</label>
+        <div class="scope-info" id="scopeInfo"></div>
+        <div class="repeat-picker" id="scopePicker">
+          <input type="radio" name="editScope" id="scope-one" value="one" checked>
+          <label for="scope-one">只改這一筆</label>
+          <input type="radio" name="editScope" id="scope-future" value="future">
+          <label for="scope-future" id="scopeFutureLabel">這筆及之後</label>
+          <input type="radio" name="editScope" id="scope-all" value="all">
+          <label for="scope-all" id="scopeAllLabel">整個系列</label>
+        </div>
+        <div class="scope-note" id="scopeNote" style="display:none;">
+          只會套用「這次有改動的欄位」（名稱、來源、進度、類別、緊急程度、結案間隔），沒改的欄位不動；各筆的完成／暫緩狀態也不受影響。
+          若修改了這筆的日期，其餘各筆會一起平移相同的天數。
+        </div>
+      </div>
+
       <div class="field">
         <label for="title">工作名稱 / 內容說明</label>
         <textarea id="title" required placeholder="例：完成 Q3 財報彙整"></textarea>
@@ -1486,6 +1529,7 @@
       <h3>標記完成</h3>
       <button class="modal-close" id="completeModalClose">✕</button>
     </div>
+    <div class="scope-info" id="completeGroupHint" style="display:none;"></div>
     <form id="completeForm">
       <div class="field">
         <label for="completedAt">完成時間</label>
@@ -1510,6 +1554,7 @@
       <h3 id="holdModalTitle">標記暫緩</h3>
       <button class="modal-close" id="holdModalClose">✕</button>
     </div>
+    <div class="scope-info" id="holdGroupHint" style="display:none;"></div>
     <form id="holdForm">
       <div class="field">
         <label for="holdNote">說明欄（選填）</label>
@@ -1569,7 +1614,7 @@
     for(let attempt=0; attempt<6; attempt++){
       const query = kind === 'insert'
         ? sb.from(table).insert(body)
-        : sb.from(table).update(body).eq('id', id);
+        : (Array.isArray(id) ? sb.from(table).update(body).in('id', id) : sb.from(table).update(body).eq('id', id));
       const { error } = await query;
       if(!error) return { error:null, missingCols };
       const col = extractMissingColumn(error);
@@ -1578,6 +1623,8 @@
         if(isBatch) body.forEach(b => { delete b[col]; });
         else delete body[col];
         missingCols.push(col);
+        // 更新時如果欄位全被略過（例如只改了資料表沒有的欄位），就沒有東西需要寫入了
+        if(kind === 'update' && !isBatch && Object.keys(body).length === 0) return { error:null, missingCols };
         continue;
       }
       return { error, missingCols };
@@ -1906,7 +1953,7 @@
       ? `<span class="complete-note">進度：${escapeHtml(t.progress)}</span>`
       : '';
     const titlePrefixHtml = playfulDone ? `<span class="done-pill">🥳 完成啦</span>` : '';
-    const seriesBadgeHtml = t.seriesId ? `<span class="badge series">${seriesKindLabel(t.seriesId)}</span>` : '';
+    const seriesBadgeHtml = t.seriesId ? `<span class="badge series">${seriesKindLabel(t.seriesId)}・共 ${seriesCount(t.seriesId)} 筆</span>` : '';
     return `
       <div class="card u-${t.urgency}${t.done ? ' done' : ''}${playfulDone ? ' done-playful' : ''}${(t.onHold && !t.done) ? ' hold' : ''}">
         <div class="stripe"></div>
@@ -2246,11 +2293,16 @@
   }
 
   // ---- work item detail modal (sidebar summary lists) ----
-  function openItemDetailModal(id){
+  function openItemDetailModal(id, idsStr){
     const t = tasks.find(x => x.id === id);
     if(!t) return;
+    // 合併項目：把這一組每一天的工作卡片都列出來
+    const groupTasks = idsStr
+      ? idsStr.split(',').map(i => tasks.find(x => x.id === i)).filter(Boolean)
+          .sort((a, b) => (a.received || '').localeCompare(b.received || ''))
+      : [];
     document.getElementById('itemDetailTitle').textContent = t.title;
-    document.getElementById('itemDetailCards').innerHTML = cardHtml(t);
+    document.getElementById('itemDetailCards').innerHTML = groupTasks.length > 1 ? groupTasks.map(cardHtml).join('') : cardHtml(t);
     document.getElementById('itemDetailModalOverlay').style.display = 'flex';
   }
   function openLoanDetailModal(id){
@@ -2303,26 +2355,73 @@
   }
   function fmtMD(d){ return `${d.getMonth()+1}/${d.getDate()}`; }
 
-  function summaryItemHtml(t, dateStr, showDoneBtn){
+  function fmtRange(a, b){
+    if(!a || !b || a === b) return fmtDate(a || b);
+    const [ya] = a.split('-');
+    const [yb, mb, db] = b.split('-');
+    return ya === yb ? `${fmtDate(a)} ~ ${mb}/${db}` : `${fmtDate(a)} ~ ${fmtDate(b)}`;
+  }
+
+  // 左側清單：同一個「延續多日」系列在同一個清單裡有 2 筆以上時，合併成一項，
+  // 日期欄改顯示起訖日與天數。每個 entry 為 { t, dateStr }，回傳時合併項多了 group 等欄位。
+  function collapseSpanEntries(entries){
+    const bySeries = new Map();
+    entries.forEach(e => {
+      const sid = e.t.seriesId;
+      if(sid && String(sid).startsWith('span_')){
+        if(!bySeries.has(sid)) bySeries.set(sid, []);
+        bySeries.get(sid).push(e);
+      }
+    });
+    const emitted = new Set();
+    const out = [];
+    entries.forEach(e => {
+      const sid = e.t.seriesId;
+      const list = sid ? bySeries.get(sid) : null;
+      if(!list || list.length < 2){ out.push(e); return; }
+      if(emitted.has(sid)) return;
+      emitted.add(sid);
+      const group = list.map(x => x.t).sort((x, y) => (x.received || '').localeCompare(y.received || ''));
+      const dates = list.map(x => x.dateStr).sort();
+      // 這些天在系列裡是不是沒有缺漏（缺漏＝中間有幾天已完成或暫緩而不在清單裡）
+      const firstRec = group[0].received, lastRec = group[group.length - 1].received;
+      const inRange = tasks.filter(x => x.seriesId === sid && x.received >= firstRec && x.received <= lastRec).length;
+      out.push({ t: group[0], dateStr: dates[0], group, rangeStart: dates[0], rangeEnd: dates[dates.length - 1], contiguous: inRange === group.length });
+    });
+    return out;
+  }
+
+  function summaryItemHtml(t, dateStr, showDoneBtn, entry){
     // 僅工作類別為「法務」的工作項目保留「標記完成」按鈕
     if(showDoneBtn === undefined) showDoneBtn = (t.category === '法務');
+    const group = entry && entry.group && entry.group.length > 1 ? entry.group : null;
+    const idsAttr = group ? ` data-ids="${group.map(x => x.id).join(',')}"` : '';
     const shownDate = dateStr || t.deadline || t.received;
     const isSimple = isSimpleCategory(t.category);
     const catHtml = t.category ? `<span class="category">${escapeHtml(t.category)}</span>` : '';
     const urgencyHtml = isSimple ? '' : `<span class="tag u-${t.urgency}">${urgencyLabel[t.urgency]}</span>`;
     const dotUrgency = isSimple ? 'normal' : t.urgency;
-    const doneBtnHtml = showDoneBtn ? `<button class="done-btn" data-id="${t.id}">完成</button>` : '';
-    const holdBtnHtml = `<button class="hold-btn${t.onHold ? ' active' : ''}" data-id="${t.id}">${t.onHold ? '取消暫緩' : '暫緩'}</button>`;
-    const deadlineText = t.deadline ? fmtDate(t.deadline) : '不限';
+    const doneBtnHtml = showDoneBtn ? `<button class="done-btn" data-id="${t.id}"${idsAttr}>完成</button>` : '';
+    const holdBtnHtml = `<button class="hold-btn${t.onHold ? ' active' : ''}" data-id="${t.id}"${idsAttr}>${t.onHold ? '取消暫緩' : '暫緩'}</button>`;
+    const editBtnHtml = `<button class="edit-btn" data-id="${t.id}"${group ? ' data-scope="all"' : ''}>編輯</button>`;
+    let dateHtml, deadlineText;
+    if(group){
+      dateHtml = `<span class="si-date">${fmtRange(entry.rangeStart, entry.rangeEnd)}</span><span class="si-span">${entry.contiguous ? '連續' : '共'} ${group.length} 天</span>`;
+      const dls = group.map(x => x.deadline).filter(Boolean).sort();
+      deadlineText = dls.length ? fmtRange(dls[0], dls[dls.length - 1]) : '不限';
+    }else{
+      dateHtml = `<span class="si-date">${fmtDate(shownDate)}</span>`;
+      deadlineText = t.deadline ? fmtDate(t.deadline) : '不限';
+    }
     return `
-      <div class="summary-item${t.onHold ? ' is-hold' : ''}" data-id="${t.id}">
+      <div class="summary-item${t.onHold ? ' is-hold' : ''}" data-id="${t.id}"${idsAttr}>
         <span class="dot dot-${dotUrgency}"></span>
         <span class="si-title">${escapeHtml(t.title)}</span>
-        <span class="si-meta">${catHtml}${urgencyHtml}<span class="si-date">${fmtDate(shownDate)}</span><span class="si-deadline">deadline：${deadlineText}</span></span>
+        <span class="si-meta">${catHtml}${urgencyHtml}${dateHtml}<span class="si-deadline">deadline：${deadlineText}</span></span>
         <span class="si-actions">
           ${doneBtnHtml}
           ${holdBtnHtml}
-          <button class="edit-btn" data-id="${t.id}">編輯</button>
+          ${editBtnHtml}
         </span>
       </div>`;
   }
@@ -2391,18 +2490,21 @@
     };
 
     thisWeekEntries.sort(byDateThenUrgency);
-    document.getElementById('thisWeekList').innerHTML = thisWeekEntries.length
-      ? thisWeekEntries.map(e => summaryItemHtml(e.t, e.dateStr, true)).join('')
+    const thisWeekView = collapseSpanEntries(thisWeekEntries);
+    document.getElementById('thisWeekList').innerHTML = thisWeekView.length
+      ? thisWeekView.map(e => summaryItemHtml(e.t, e.dateStr, true, e)).join('')
       : `<div class="summary-empty">本週沒有待辦工作 🎉</div>`;
 
     meetingEntries.sort(byDateThenUrgency);
-    document.getElementById('thisWeekMeetingList').innerHTML = meetingEntries.length
-      ? meetingEntries.map(e => summaryItemHtml(e.t, e.dateStr, false)).join('')
+    const meetingView = collapseSpanEntries(meetingEntries);
+    document.getElementById('thisWeekMeetingList').innerHTML = meetingView.length
+      ? meetingView.map(e => summaryItemHtml(e.t, e.dateStr, false, e)).join('')
       : `<div class="summary-empty">本週沒有會議事項 🎉</div>`;
 
     tripEntries.sort(byDateThenUrgency);
-    document.getElementById('thisWeekTripList').innerHTML = tripEntries.length
-      ? tripEntries.map(e => summaryItemHtml(e.t, e.dateStr, false)).join('')
+    const tripView = collapseSpanEntries(tripEntries);
+    document.getElementById('thisWeekTripList').innerHTML = tripView.length
+      ? tripView.map(e => summaryItemHtml(e.t, e.dateStr, false, e)).join('')
       : `<div class="summary-empty">本週沒有出差行程 🎉</div>`;
 
     const groups = Object.values(overdueMap).sort((a,b) => b.sortTime - a.sortTime);
@@ -2411,11 +2513,11 @@
       const weekLabel = weeksArr.length > 1
         ? `第${weeksArr[0]}~${weeksArr[weeksArr.length-1]}週`
         : `第${weeksArr[0]}週`;
-      const entriesSorted = g.entries.sort(byDateThenUrgency);
+      const entriesSorted = collapseSpanEntries(g.entries.sort(byDateThenUrgency));
       return `
         <div class="overdue-group">
           <div class="og-head">${g.month}月 ${weekLabel}<span class="og-count">${entriesSorted.length}</span></div>
-          <div class="og-list">${entriesSorted.map(e => summaryItemHtml(e.t, e.dateStr, true)).join('')}</div>
+          <div class="og-list">${entriesSorted.map(e => summaryItemHtml(e.t, e.dateStr, true, e)).join('')}</div>
         </div>`;
     }).join('');
     document.getElementById('overdueGroups').innerHTML = groups.length
@@ -2426,8 +2528,9 @@
       .filter(t => t.onHold && !t.done)
       .map(t => ({ t, dateStr: t.deadline || t.received }));
     onHoldEntries.sort(byDateThenUrgency);
-    document.getElementById('onHoldList').innerHTML = onHoldEntries.length
-      ? onHoldEntries.map(e => summaryItemHtml(e.t, e.dateStr, true)).join('')
+    const onHoldView = collapseSpanEntries(onHoldEntries);
+    document.getElementById('onHoldList').innerHTML = onHoldView.length
+      ? onHoldView.map(e => summaryItemHtml(e.t, e.dateStr, true, e)).join('')
       : `<div class="summary-empty">目前沒有暫緩中的工作</div>`;
   }
 
@@ -2465,6 +2568,7 @@
     submitBtn.textContent = '加入工作清單';
     cancelEditBtn.style.display = 'none';
     panelEl.classList.remove('editing');
+    resetScopeControls();
     resetRepeatControls();
   }
 
@@ -2505,6 +2609,53 @@
   function seriesKindLabel(seriesId){
     return String(seriesId).startsWith('span_') ? '➡ 延續多日' : '🔁 每週重複';
   }
+  function seriesCount(seriesId){
+    return tasks.reduce((n, x) => n + (x.seriesId === seriesId ? 1 : 0), 0);
+  }
+  function seriesSiblings(t){ return t.seriesId ? tasks.filter(x => x.seriesId === t.seriesId) : []; }
+  // 依套用範圍找出「除了 t 本身以外」要一起修改的工作（要在修改 t 之前呼叫，以原本的日期為準）
+  function scopeTargets(t, scope){
+    const others = seriesSiblings(t).filter(x => x.id !== t.id);
+    if(scope === 'all') return others;
+    if(scope === 'future') return others.filter(x => (x.received || '') >= (t.received || ''));
+    return [];
+  }
+  const scopeFieldEl = document.getElementById('scopeField');
+  function getEditScope(){
+    if(!editingId || scopeFieldEl.style.display === 'none') return 'one';
+    const c = document.querySelector('input[name="editScope"]:checked');
+    return c ? c.value : 'one';
+  }
+  function resetScopeControls(){
+    scopeFieldEl.style.display = 'none';
+    document.getElementById('scope-one').checked = true;
+    document.getElementById('scopeNote').style.display = 'none';
+  }
+  // 編輯的工作屬於某個系列（且系列裡有其他筆）時，顯示「套用範圍」選項
+  function setupScopeField(t){
+    resetScopeControls();
+    const sib = seriesSiblings(t);
+    if(sib.length <= 1) return;
+    const allCount = sib.length;
+    const futureCount = scopeTargets(t, 'future').length + 1;
+    const showFuture = futureCount > 1 && futureCount < allCount; // 否則等同「只改這筆」或「整個系列」
+    document.getElementById('scopeInfo').textContent = `這筆屬於「${seriesKindLabel(t.seriesId)}」系列，共 ${allCount} 筆`;
+    document.getElementById('scopeFutureLabel').textContent = `這筆及之後（${futureCount}）`;
+    document.getElementById('scopeFutureLabel').style.display = showFuture ? '' : 'none';
+    document.getElementById('scopeAllLabel').textContent = `整個系列（${allCount}）`;
+    document.getElementById('scopePicker').style.gridTemplateColumns = showFuture ? 'repeat(3,1fr)' : 'repeat(2,1fr)';
+    scopeFieldEl.style.display = '';
+  }
+  function scopeAffectedCount(){
+    if(!editingId) return 0;
+    const t = tasks.find(x => x.id === editingId);
+    return t ? scopeTargets(t, getEditScope()).length + 1 : 0;
+  }
+  document.querySelectorAll('input[name="editScope"]').forEach(r => r.addEventListener('change', () => {
+    document.getElementById('scopeNote').style.display = getEditScope() === 'one' ? 'none' : '';
+    updateRepeatPreview();
+  }));
+
   function getRepeatMode(){
     const checked = document.querySelector('input[name="repeatMode"]:checked');
     return checked ? checked.value : 'none';
@@ -2555,7 +2706,10 @@
     if(!editingId) return occ.dates;
     return occ.dates.filter(d => d !== receivedInput.value);
   }
-  function defaultSubmitLabel(){ return editingId ? '儲存修改' : '加入工作清單'; }
+  function defaultSubmitLabel(){
+    if(!editingId) return '加入工作清單';
+    return getEditScope() === 'one' ? '儲存修改' : `儲存並套用到 ${scopeAffectedCount()} 筆`;
+  }
 
   function updateRepeatPreview(){
     const occ = computeOccurrences();
@@ -2652,7 +2806,7 @@
     if(e.target.id === 'taskModalOverlay') closeTaskModal();
   });
 
-  function startEdit(id){
+  function startEdit(id, presetScope){
     const t = tasks.find(x => x.id === id);
     if(!t) return;
     editingId = id;
@@ -2680,6 +2834,13 @@
     submitBtn.textContent = '儲存修改';
     cancelEditBtn.style.display = 'block';
     panelEl.classList.add('editing');
+    // 這筆若屬於系列，顯示「套用範圍」（只改這筆／這筆及之後／整個系列）
+    setupScopeField(t);
+    // 從左側合併項目按「編輯」：預設套用到整個系列（合併項本來就代表整段連續工作）
+    if(presetScope === 'all' && scopeFieldEl.style.display !== 'none'){
+      document.getElementById('scope-all').checked = true;
+      document.getElementById('scopeNote').style.display = '';
+    }
     // 編輯時也可以設定延續／重複：這一筆保留，另外依規則再建立其餘日期
     document.getElementById('r-none').checked = true;
     repeatFieldEl.style.display = '';
@@ -2761,9 +2922,37 @@
       const seriesId = occ.mode === 'none' ? '' : (t.seriesId || ((occ.mode === 'span' ? 'span_' : 'rep_') + newId()));
       const gap = (!isUnlimited && deadline) ? daysBetween(received, deadline) : null;
 
+      // ---- 統一修正：把「這次有改動的欄位」套用到同系列的其他筆 ----
+      const scope = getEditScope();
+      const others = scopeTargets(t, scope);            // 必須在修改 t 之前計算（以原本的日期為準）
+      const prevGap = t.deadline ? daysBetween(t.received, t.deadline) : null;
+      const dateDelta = daysBetween(t.received, received);
+      const sharedChanges = {};
+      if(title !== t.title) sharedChanges.title = title;
+      if(source !== t.source) sharedChanges.source = source;
+      if(progress !== t.progress) sharedChanges.progress = progress;
+      if(category !== t.category) sharedChanges.category = category;
+      if(urgency !== t.urgency) sharedChanges.urgency = urgency;
+      const gapChanged = prevGap !== gap;
+      const otherUpdates = [];
+      others.forEach(o => {
+        const payload = { ...sharedChanges };
+        let newReceived = o.received;
+        if(dateDelta !== 0){ newReceived = addDaysStr(o.received, dateDelta); payload.received = newReceived; }
+        let newDeadline = o.deadline;
+        if(gapChanged) newDeadline = gap === null ? null : addDaysStr(newReceived, gap);
+        else if(dateDelta !== 0 && o.deadline) newDeadline = addDaysStr(o.deadline, dateDelta);
+        if(newDeadline !== o.deadline) payload.deadline = newDeadline;
+        if(Object.keys(payload).length === 0) return;
+        const prevVals = {};
+        Object.keys(payload).forEach(k => { prevVals[k] = o[k]; });
+        otherUpdates.push({ task:o, payload, prevVals });
+      });
+
       const prev = { title:t.title, source:t.source, progress:t.progress, category:t.category, received:t.received, deadline:t.deadline, urgency:t.urgency, seriesId:t.seriesId };
       t.title = title; t.source = source; t.progress = progress; t.category = category; t.received = received; t.deadline = deadline; t.urgency = urgency;
       if(seriesId) t.seriesId = seriesId;
+      otherUpdates.forEach(u => Object.assign(u.task, u.payload));
 
       const extraTasks = extraDates.map(d => ({
         id: newId(),
@@ -2788,6 +2977,7 @@
         console.error('更新到 Supabase 失敗：', upd.error);
         alert('儲存修改失敗，請檢查網路連線或 Supabase 設定。');
         Object.assign(t, prev);
+        otherUpdates.forEach(u => Object.assign(u.task, u.prevVals));
         tasks = tasks.filter(x => !extraIds.has(x.id));
         saveLocalBackup();
         renderAll();
@@ -2795,6 +2985,42 @@
       }
 
       let missing = upd.missingCols;
+
+      // 同系列其他筆：內容相同的更新合併成一次請求（每批最多 40 筆），日期不同的各自更新
+      if(otherUpdates.length){
+        const groups = new Map();
+        otherUpdates.forEach(u => {
+          const key = JSON.stringify(u.payload);
+          if(!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(u);
+        });
+        let failedOthers = 0;
+        const jobs = [];
+        groups.forEach(list => {
+          for(let i = 0; i < list.length; i += 40){
+            const chunk = list.slice(i, i + 40);
+            jobs.push(async () => {
+              const r = await resilientWrite(TABLE, 'update', chunk[0].payload, chunk.map(u => u.task.id));
+              warnMissingColumns(r.missingCols);
+              if(r.error){
+                console.error('同步更新系列工作失敗：', r.error);
+                chunk.forEach(u => Object.assign(u.task, u.prevVals));
+                failedOthers += chunk.length;
+              }
+            });
+          }
+        });
+        let nextJob = 0;
+        await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, async () => {
+          while(nextJob < jobs.length){ const job = jobs[nextJob++]; await job(); }
+        }));
+        if(failedOthers){
+          saveLocalBackup();
+          renderAll();
+          alert(`這一筆已儲存，但同系列有 ${failedOthers} 筆沒能套用修改（已還原成原本的內容），請檢查網路連線後再試一次。`);
+        }
+      }
+
       if(extraTasks.length){
         const rows = extraTasks.map(x => ({
           id:x.id, title, source, progress, category, received:x.received, deadline:x.deadline, urgency, done:false,
@@ -2869,28 +3095,51 @@
   // ---- shared action handling (list cards + modal cards) ----
   // ---- mark-as-done modal ----
   let pendingCompleteId = null;
+  let pendingCompleteGroup = null; // 左側合併項目：要一起標記完成的所有工作 id
+  // 依 id 分批更新同一組欄位（每批最多 40 筆），回傳更新失敗的 id 與缺少的欄位
+  async function bulkUpdate(ids, payload){
+    const failedIds = [];
+    let missingCols = [];
+    for(let i = 0; i < ids.length; i += 40){
+      const chunk = ids.slice(i, i + 40);
+      const r = await resilientWrite(TABLE, 'update', payload, chunk);
+      warnMissingColumns(r.missingCols);
+      missingCols = missingCols.concat(r.missingCols);
+      if(r.error){ console.error('更新 Supabase 失敗：', r.error); failedIds.push(...chunk); }
+    }
+    return { failedIds, missingCols };
+  }
+  function parseGroupIds(idsStr){
+    const ids = idsStr ? idsStr.split(',').filter(i => tasks.some(x => x.id === i)) : [];
+    return ids.length > 1 ? ids : null;
+  }
   const completeModalOverlay = document.getElementById('completeModalOverlay');
   const completedAtInput = document.getElementById('completedAt');
   const completeNoteInput = document.getElementById('completeNote');
 
-  function openCompleteModal(id){
+  function openCompleteModal(id, ids){
     const t = tasks.find(x => x.id === id);
     pendingCompleteId = id;
+    pendingCompleteGroup = ids || null;
+    const hint = document.getElementById('completeGroupHint');
+    hint.style.display = pendingCompleteGroup ? '' : 'none';
+    hint.textContent = pendingCompleteGroup ? `會把這 ${pendingCompleteGroup.length} 天的工作一併標記為完成` : '';
     completedAtInput.value = toLocalDateValue(new Date());
     completeNoteInput.value = (t && t.completeNote) || '';
     completeModalOverlay.style.display = 'flex';
   }
   function closeCompleteModal(){
     pendingCompleteId = null;
+    pendingCompleteGroup = null;
     completeModalOverlay.style.display = 'none';
   }
 
-  async function toggleDone(id){
+  async function toggleDone(id, idsStr){
     const t = tasks.find(x => x.id === id);
     if(!t) return;
     if(!t.done){
       // marking as done: collect completion date + optional note first
-      openCompleteModal(id);
+      openCompleteModal(id, parseGroupIds(idsStr));
       return;
     }
     // un-marking: keep the completion note (so it isn't lost), just clear the completed flag/date
@@ -2912,17 +3161,22 @@
 
   // ---- mark/unmark-hold modal ----
   let pendingHoldId = null;
+  let pendingHoldGroup = null; // 左側合併項目：要一起暫緩／取消暫緩的所有工作 id
   let pendingHoldTarget = false; // the on-hold state we are switching TO
   const holdModalOverlay = document.getElementById('holdModalOverlay');
   const holdModalTitle = document.getElementById('holdModalTitle');
   const holdNoteInput = document.getElementById('holdNote');
   const holdSubmitBtn = document.getElementById('holdSubmitBtn');
 
-  function openHoldModal(id){
+  function openHoldModal(id, ids){
     const t = tasks.find(x => x.id === id);
     if(!t) return;
     pendingHoldId = id;
+    pendingHoldGroup = ids || null;
     pendingHoldTarget = !t.onHold;
+    const hint = document.getElementById('holdGroupHint');
+    hint.style.display = pendingHoldGroup ? '' : 'none';
+    hint.textContent = pendingHoldGroup ? `會把這 ${pendingHoldGroup.length} 天的工作一併${pendingHoldTarget ? '暫緩' : '取消暫緩'}` : '';
     holdModalTitle.textContent = pendingHoldTarget ? '標記暫緩' : '取消暫緩';
     holdSubmitBtn.textContent = pendingHoldTarget ? '確認暫緩' : '確認取消暫緩';
     holdNoteInput.value = t.holdNote || '';
@@ -2930,35 +3184,33 @@
   }
   function closeHoldModal(){
     pendingHoldId = null;
+    pendingHoldGroup = null;
     holdModalOverlay.style.display = 'none';
   }
 
-  async function toggleHold(id){
-    openHoldModal(id);
+  async function toggleHold(id, idsStr){
+    openHoldModal(id, parseGroupIds(idsStr));
   }
 
   document.getElementById('holdForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     if(!pendingHoldId) return;
-    const id = pendingHoldId;
-    const t = tasks.find(x => x.id === id);
-    if(!t) return;
+    const ids = pendingHoldGroup || [pendingHoldId];
+    const targets = ids.map(i => tasks.find(x => x.id === i)).filter(Boolean);
+    if(!targets.length) return;
     const holdNote = holdNoteInput.value.trim();
     const targetOnHold = pendingHoldTarget;
 
-    const prev = { onHold:t.onHold, holdNote:t.holdNote };
-    t.onHold = targetOnHold;
-    t.holdNote = holdNote;
+    const prevs = new Map(targets.map(t => [t.id, { onHold:t.onHold, holdNote:t.holdNote }]));
+    targets.forEach(t => { t.onHold = targetOnHold; t.holdNote = holdNote; });
     saveLocalBackup();
     closeHoldModal();
     renderAll();
 
-    const { error, missingCols } = await resilientWrite(TABLE, 'update', { on_hold:targetOnHold, hold_note:holdNote }, id);
-    warnMissingColumns(missingCols);
-    if(error){
-      console.error('更新 Supabase 失敗：', error);
+    const { failedIds } = await bulkUpdate(targets.map(t => t.id), { on_hold:targetOnHold, hold_note:holdNote });
+    if(failedIds.length){
       alert('更新失敗，請檢查網路連線或 Supabase 設定。');
-      Object.assign(t, prev);
+      failedIds.forEach(i => { const t = tasks.find(x => x.id === i); if(t) Object.assign(t, prevs.get(i)); });
       saveLocalBackup();
       renderAll();
     }
@@ -2972,27 +3224,23 @@
   document.getElementById('completeForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     if(!pendingCompleteId) return;
-    const id = pendingCompleteId;
-    const t = tasks.find(x => x.id === id);
-    if(!t) return;
+    const ids = pendingCompleteGroup || [pendingCompleteId];
+    const targets = ids.map(i => tasks.find(x => x.id === i)).filter(Boolean);
+    if(!targets.length) return;
     const completedAt = completedAtInput.value;
     const completeNote = completeNoteInput.value.trim();
     if(!completedAt) return;
 
-    const prev = { done:t.done, completedAt:t.completedAt, completeNote:t.completeNote };
-    t.done = true;
-    t.completedAt = completedAt;
-    t.completeNote = completeNote;
+    const prevs = new Map(targets.map(t => [t.id, { done:t.done, completedAt:t.completedAt, completeNote:t.completeNote }]));
+    targets.forEach(t => { t.done = true; t.completedAt = completedAt; t.completeNote = completeNote; });
     saveLocalBackup();
     closeCompleteModal();
     renderAll();
 
-    const { error, missingCols } = await resilientWrite(TABLE, 'update', { done:true, completed_at:completedAt, complete_note:completeNote }, id);
-    warnMissingColumns(missingCols);
-    if(error){
-      console.error('更新 Supabase 失敗：', error);
+    const { failedIds } = await bulkUpdate(targets.map(t => t.id), { done:true, completed_at:completedAt, complete_note:completeNote });
+    if(failedIds.length){
       alert('更新失敗，請檢查網路連線或 Supabase 設定。');
-      Object.assign(t, prev);
+      failedIds.forEach(i => { const t = tasks.find(x => x.id === i); if(t) Object.assign(t, prevs.get(i)); });
       saveLocalBackup();
       renderAll();
     }
@@ -3003,18 +3251,35 @@
     if(e.target.id === 'completeModalOverlay') closeCompleteModal();
   });
 
-  // removedList：要從畫面移除的工作；remoteDelete：實際對 Supabase 執行刪除的函式
-  async function removeTasks(removedList, remoteDelete){
+  // 依 id 分批刪除（一次一批，避免網址過長）。
+  // 不依賴 series_id 欄位，所以即使資料表還沒新增該欄位，也能刪除整批工作。
+  // 回傳 { deletedIds, error }：發生錯誤前已成功刪除的 id 也一併回報。
+  async function deleteTasksByIds(ids){
+    const CHUNK = 40;
+    const deletedIds = [];
+    for(let i = 0; i < ids.length; i += CHUNK){
+      const chunk = ids.slice(i, i + CHUNK);
+      const { error } = await sb.from(TABLE).delete().in('id', chunk);
+      if(error) return { deletedIds, error };
+      deletedIds.push(...chunk);
+    }
+    return { deletedIds, error:null };
+  }
+
+  // removedList：要從畫面與資料庫移除的工作
+  async function removeTasks(removedList){
     const idSet = new Set(removedList.map(x => x.id));
     tasks = tasks.filter(x => !idSet.has(x.id));
     if(editingId && idSet.has(editingId)) closeTaskModal();
     saveLocalBackup();
     renderAll();
-    const { error } = await remoteDelete();
+    const { deletedIds, error } = await deleteTasksByIds(removedList.map(x => x.id));
     if(error){
       console.error('刪除 Supabase 資料失敗：', error);
       alert('刪除失敗，請檢查網路連線或 Supabase 設定。');
-      tasks.push(...removedList);
+      // 只把「資料庫裡實際上沒刪掉」的工作放回畫面
+      const done = new Set(deletedIds);
+      tasks.push(...removedList.filter(x => !done.has(x.id)));
       saveLocalBackup();
       renderAll();
     }
@@ -3027,7 +3292,7 @@
     const siblings = t.seriesId ? tasks.filter(x => x.seriesId === t.seriesId) : [];
     if(siblings.length > 1){ openSeriesDeleteModal(t, siblings); return; }
     if(!confirm('確定要刪除這筆工作紀錄嗎？')) return;
-    await removeTasks([t], () => sb.from(TABLE).delete().eq('id', id));
+    await removeTasks([t]);
   }
 
   // ---- 刪除系列工作 modal ----
@@ -3058,11 +3323,11 @@
     const { task:t, all, future } = pendingSeriesDelete;
     closeSeriesDeleteModal();
     if(scope === 'one'){
-      await removeTasks([t], () => sb.from(TABLE).delete().eq('id', t.id));
+      await removeTasks([t]);
     }else if(scope === 'future'){
-      await removeTasks(future, () => sb.from(TABLE).delete().eq('series_id', t.seriesId).gte('received', t.received));
+      await removeTasks(future);
     }else{
-      await removeTasks(all, () => sb.from(TABLE).delete().eq('series_id', t.seriesId));
+      await removeTasks(all);
     }
   }
   document.getElementById('seriesDeleteOne').addEventListener('click', () => runSeriesDelete('one'));
@@ -3080,9 +3345,9 @@
     const editBtn = e.target.closest('.edit-btn');
     const copyBtn = e.target.closest('.copy-btn');
     const delBtn = e.target.closest('.del-btn');
-    if(doneBtn){ toggleDone(doneBtn.dataset.id); }
-    if(holdBtn){ toggleHold(holdBtn.dataset.id); }
-    if(editBtn){ startEdit(editBtn.dataset.id); }
+    if(doneBtn){ toggleDone(doneBtn.dataset.id, doneBtn.dataset.ids); }
+    if(holdBtn){ toggleHold(holdBtn.dataset.id, holdBtn.dataset.ids); }
+    if(editBtn){ startEdit(editBtn.dataset.id, editBtn.dataset.scope); }
     if(copyBtn){ startCopy(copyBtn.dataset.id); }
     if(delBtn){ deleteTask(delBtn.dataset.id); }
   });
@@ -3167,7 +3432,7 @@
     container.addEventListener('click', (e) => {
       if(e.target.closest('.si-actions')) return; // 完成/編輯按鈕交由既有的委派事件處理
       const item = e.target.closest('.summary-item');
-      if(item && item.dataset.id) openItemDetailModal(item.dataset.id);
+      if(item && item.dataset.id) openItemDetailModal(item.dataset.id, item.dataset.ids);
     });
   });
 
