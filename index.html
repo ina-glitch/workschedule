@@ -2725,6 +2725,9 @@
         return;
       }
 
+      // 工作來源為「-」的工作沒有完成的概念，不列入「未完成的工作項目」
+      { const src = (t.source || '').trim(); if(src === '-' || src === '－') return; }
+
       // 不在本週範圍內：判斷是否為過期未完成，並決定要歸類到哪一週
       let bucketMon = null, bucketDateStr = null;
       if(dlMon && dlMon.getTime() < todayMonday.getTime()){
