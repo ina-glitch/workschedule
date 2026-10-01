@@ -517,6 +517,9 @@
   .summary-item .si-actions .done-btn:hover{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
   .summary-item .si-actions .hold-btn:hover{ background:var(--hold-bg); border-color:var(--hold-line); color:var(--hold-text); }
   .summary-item .si-actions .edit-btn:hover{ background:#EEF0FB; border-color:#4A4FB0; color:#4A4FB0; }
+  .summary-item .si-actions .copy-btn:hover{ background:var(--low-bg); border-color:var(--teal); color:var(--teal-deep); }
+  .summary-item .si-actions .del-btn:hover{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
+  .summary-item .si-actions{ flex-wrap:wrap; justify-content:flex-end; }
   .summary-item.is-hold{ border-color:var(--hold-line); background:var(--hold-bg); }
 
 
@@ -724,7 +727,7 @@
   .field-legend .swatch.cat-meeting{ background:#F1E9FB; }
   .field-legend .swatch.cat-trip{ background:var(--amber-bg); }
   .field-legend .swatch.cat-legal{ background:#FDEDF3; }
-  .field-legend .swatch.cat-none{ background:var(--low-bg); }
+  .field-legend .swatch.cat-none{ background:#FCE6E1; }
   .field-legend .dot.dot-top{ background:var(--red); }
   .field-legend .dot.dot-high{ background:var(--amber); }
   .field-legend .dot.dot-normal{ background:var(--teal); }
@@ -897,7 +900,7 @@
   .chip.cat-meeting{ background:#F1E9FB; color:#6B3FA0; }
   .chip.cat-trip{ background:var(--amber-bg); color:#8a6415; }
   .chip.cat-legal{ background:#FDEDF3; color:#B0397A; }
-  .chip.cat-none{ background:var(--low-bg); color:var(--teal-deep); }
+  .chip.cat-none{ background:#FCE6E1; color:#B4513F; }
   .chip.cat-loan{ background:#DCEEF5; color:#1B6E8C; }
   .chip.done{ text-decoration:line-through; opacity:0.55; }
   .chip.chip-deadline{ font-weight:700; box-shadow:0 0 0 1px var(--red) inset; }
@@ -1818,6 +1821,10 @@
   // shows up on that date in the calendar (no urgency picker, no deadline).
   // 除了「法務」維持完整規則外，其餘所有類別（含「不指定」）都只需要填工作時間
   function isSimpleCategory(category){ return category !== '法務'; }
+  // 可以使用「完成」功能的工作：只有類別為「法務」
+  function canComplete(t){
+    return t.category === '法務';
+  }
   const urgencyFieldEl = document.getElementById('urgencyField');
   const deadlineFieldEl = document.getElementById('deadlineField');
   const receivedLabelEl = document.getElementById('receivedLabel');
@@ -1850,8 +1857,13 @@
     return { key:'ok', label:'尚有餘裕' };
   }
 
+  // 只有「法務」有完成的概念：用「狀態」篩選時，只顯示法務類別的工作項目
+  function onlyLegalWhenStatusFiltered(list){
+    return filterMode === 'all' ? list : list.filter(canComplete);
+  }
+
   function filteredTasks(){
-    let list = tasks.slice();
+    let list = onlyLegalWhenStatusFiltered(tasks.slice());
     if(filterMode === 'active') list = list.filter(t => !t.done);
     if(filterMode === 'done') list = list.filter(t => t.done);
     if(filterMode === 'hold') list = list.filter(t => t.onHold);
@@ -1883,7 +1895,7 @@
   // same as filteredTasks() but ignores the category filter itself, so chip counts
   // reflect "how many items would show if I picked this category" given the other active filters
   function tasksMatchingOtherFilters(){
-    let list = tasks.slice();
+    let list = onlyLegalWhenStatusFiltered(tasks.slice());
     if(filterMode === 'active') list = list.filter(t => !t.done);
     if(filterMode === 'done') list = list.filter(t => t.done);
     if(filterMode === 'hold') list = list.filter(t => t.onHold);
@@ -2027,7 +2039,7 @@
           </div>
         </div>
         <div class="actions">
-          <button class="done-btn" data-id="${t.id}">${t.done ? '取消完成' : '標記完成'}</button>
+          ${(canComplete(t) || t.done) ? `<button class="done-btn" data-id="${t.id}">${t.done ? '取消完成' : '標記完成'}</button>` : ''}
           <button class="hold-btn${t.onHold ? ' active' : ''}" data-id="${t.id}">${t.onHold ? '取消暫緩' : '標記暫緩'}</button>
           <button class="edit-btn" data-id="${t.id}">編輯</button>
           <button class="copy-btn" data-id="${t.id}">複製</button>
@@ -2097,7 +2109,7 @@
           </div>
         </div>
         <div class="actions">
-          <button class="done-btn" data-id="${doneTargets[0]}"${idsAttr(doneTargets)}>${allDone ? '取消完成' : '標記完成'}</button>
+          ${(canComplete(rep) || doneCount) ? `<button class="done-btn" data-id="${doneTargets[0]}"${idsAttr(doneTargets)}>${allDone ? '取消完成' : '標記完成'}</button>` : ''}
           ${holdBtn}
           <button class="edit-btn" data-id="${rep.id}" data-scope="all">編輯</button>
           <button class="copy-btn" data-id="${rep.id}">複製</button>
@@ -2632,7 +2644,8 @@
 
   function summaryItemHtml(t, dateStr, showDoneBtn, entry){
     // 僅工作類別為「法務」的工作項目保留「標記完成」按鈕
-    if(showDoneBtn === undefined) showDoneBtn = (t.category === '法務');
+    if(showDoneBtn === undefined) showDoneBtn = true;
+    showDoneBtn = showDoneBtn && canComplete(t);
     const group = entry && entry.group && entry.group.length > 1 ? entry.group : null;
     const idsAttr = group ? ` data-ids="${group.map(x => x.id).join(',')}"` : '';
     const shownDate = dateStr || t.deadline || t.received;
@@ -2643,6 +2656,8 @@
     const doneBtnHtml = showDoneBtn ? `<button class="done-btn" data-id="${t.id}"${idsAttr}>完成</button>` : '';
     const holdBtnHtml = `<button class="hold-btn${t.onHold ? ' active' : ''}" data-id="${t.id}"${idsAttr}>${t.onHold ? '取消暫緩' : '暫緩'}</button>`;
     const editBtnHtml = `<button class="edit-btn" data-id="${t.id}"${group ? ' data-scope="all"' : ''}>編輯</button>`;
+    const copyBtnHtml = `<button class="copy-btn" data-id="${t.id}">複製</button>`;
+    const delBtnHtml = `<button class="del-btn" data-id="${t.id}"${idsAttr}>刪除</button>`;
     let dateHtml, deadlineText;
     if(group){
       dateHtml = `<span class="si-date">${fmtRange(entry.rangeStart, entry.rangeEnd)}</span><span class="si-span">${entry.contiguous ? '連續' : '共'} ${group.length} 天</span>`;
@@ -2661,6 +2676,8 @@
           ${doneBtnHtml}
           ${holdBtnHtml}
           ${editBtnHtml}
+          ${copyBtnHtml}
+          ${delBtnHtml}
         </span>
       </div>`;
   }
