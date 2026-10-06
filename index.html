@@ -726,6 +726,7 @@
   .field-legend .swatch.cat-leave{ background:#E4EEFC; }
   .field-legend .swatch.cat-meeting{ background:#F1E9FB; }
   .field-legend .swatch.cat-trip{ background:var(--amber-bg); }
+  .field-legend .swatch.cat-misc{ background:#E3F3E6; }
   .field-legend .swatch.cat-legal{ background:#FDEDF3; }
   .field-legend .swatch.cat-none{ background:#FCE6E1; }
   .field-legend .dot.dot-top{ background:var(--red); }
@@ -899,6 +900,7 @@
   .chip.cat-leave{ background:#E4EEFC; color:#2A5FA8; }
   .chip.cat-meeting{ background:#F1E9FB; color:#6B3FA0; }
   .chip.cat-trip{ background:var(--amber-bg); color:#8a6415; }
+  .chip.cat-misc{ background:#E3F3E6; color:#2F7A45; }
   .chip.cat-legal{ background:#FDEDF3; color:#B0397A; }
   .chip.cat-none{ background:#FCE6E1; color:#B4513F; }
   .chip.cat-loan{ background:#DCEEF5; color:#1B6E8C; }
@@ -1229,12 +1231,14 @@
           <option value="請假">請假</option>
           <option value="會議">會議</option>
           <option value="公差">公差</option>
+          <option value="雜項">雜項</option>
           <option value="法務">法務</option>
         </select>
         <div class="field-legend">
           <span class="legend-item"><span class="swatch cat-leave"></span>請假</span>
           <span class="legend-item"><span class="swatch cat-meeting"></span>會議</span>
           <span class="legend-item"><span class="swatch cat-trip"></span>公差</span>
+          <span class="legend-item"><span class="swatch cat-misc"></span>雜項</span>
           <span class="legend-item"><span class="swatch cat-legal"></span>法務</span>
           <span class="legend-item"><span class="swatch cat-none"></span>其他</span>
         </div>
@@ -1821,9 +1825,9 @@
   // shows up on that date in the calendar (no urgency picker, no deadline).
   // 除了「法務」維持完整規則外，其餘所有類別（含「不指定」）都只需要填工作時間
   function isSimpleCategory(category){ return category !== '法務'; }
-  // 可以使用「完成」功能的工作：只有類別為「法務」
+  // 可以使用「完成」功能的工作：類別為「法務」或「其他」（未指定類別）
   function canComplete(t){
-    return t.category === '法務';
+    return t.category === '法務' || !t.category;
   }
   const urgencyFieldEl = document.getElementById('urgencyField');
   const deadlineFieldEl = document.getElementById('deadlineField');
@@ -1857,7 +1861,7 @@
     return { key:'ok', label:'尚有餘裕' };
   }
 
-  // 只有「法務」有完成的概念：用「狀態」篩選時，只顯示法務類別的工作項目
+  // 「法務」與「其他」有完成的概念：用「狀態」篩選時，只顯示這兩類的工作項目
   function onlyLegalWhenStatusFiltered(list){
     return filterMode === 'all' ? list : list.filter(canComplete);
   }
@@ -1887,6 +1891,7 @@
     { key:'請假', label:'請假' },
     { key:'會議', label:'會議' },
     { key:'公差', label:'公差' },
+    { key:'雜項', label:'雜項' },
     { key:'法務', label:'法務' },
     { key:'合約借閱', label:'合約借閱' },
     { key:'none', label:'其他' },
@@ -2297,7 +2302,7 @@
     return map;
   }
 
-  const categoryClassMap = { '請假':'cat-leave', '會議':'cat-meeting', '公差':'cat-trip', '法務':'cat-legal', '合約借閱':'cat-loan' };
+  const categoryClassMap = { '請假':'cat-leave', '會議':'cat-meeting', '公差':'cat-trip', '雜項':'cat-misc', '法務':'cat-legal', '合約借閱':'cat-loan' };
   function categoryClass(t){
     return categoryClassMap[t.category] || 'cat-none';
   }
@@ -2643,7 +2648,7 @@
   }
 
   function summaryItemHtml(t, dateStr, showDoneBtn, entry){
-    // 僅工作類別為「法務」的工作項目保留「標記完成」按鈕
+    // 僅工作類別為「法務」或「其他」的工作項目保留「標記完成」按鈕
     if(showDoneBtn === undefined) showDoneBtn = true;
     showDoneBtn = showDoneBtn && canComplete(t);
     const group = entry && entry.group && entry.group.length > 1 ? entry.group : null;
